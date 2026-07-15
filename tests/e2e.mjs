@@ -240,7 +240,7 @@ for (const s of CORPUS) {
 	if (STABLE_EXACT.has(s)) check(`untouched: ${name}`, p1 === s, JSON.stringify(p1));
 }
 
-// ── 9. Mail: Ctrl+I, Cc/Bcc reveal + persistence ─────────────────────────────
+// ── 9. Mail: Ctrl+I works; the scenery is scenery ────────────────────────────
 await tab('Term').click();
 await textarea().fill('emphasis test');
 await tab('Mail').click();
@@ -249,11 +249,20 @@ await page.keyboard.press('Control+a');
 await page.keyboard.press('Control+i');
 await page.waitForTimeout(300);
 check('mail Ctrl+I italicizes', (await rich().locator('i, em').count()) >= 1, await rich().innerHTML());
-await page.getByRole('button', { name: 'Cc Bcc' }).click();
-await page.locator('#mail-cc').fill('cc@example.com');
-await page.waitForTimeout(900);
-await page.reload({ waitUntil: 'networkidle' });
-check('cc revealed + persisted after reload', (await page.locator('#mail-cc').inputValue()) === 'cc@example.com');
+// The compose furniture must stay furniture: nothing in it may take a keystroke,
+// take focus, or claim an action. The addressing rows and the Send button used to
+// do all three — Send needed a footer explaining that it didn't send, and the
+// fields swallowed typing into state no other room saw and no saved file carried.
+check(
+	'mail has no field to type into',
+	(await page.locator('section input, section [contenteditable="true"]:not(.rich)').count()) === 0,
+	'an addressing row that accepts typing is a promise the app does not keep'
+);
+check(
+	'mail offers no action but the editor and B/I/U',
+	(await page.locator('section button:not([title^="Bold"]):not([title^="Italic"]):not([title^="Underline"])').count()) === 0,
+	'every button in Mail should be a real formatting control'
+);
 
 // ── 10. Scratch menus all function ───────────────────────────────────────────
 await tab('Scratch').click();
@@ -747,6 +756,63 @@ for (const c of SEMANTIC_CASES) {
 			`the writer's word ${JSON.stringify(c.bold)} must survive even when its mark does not — ${trace}`
 		);
 	}
+}
+
+// ── 19. Scenery says nothing it cannot do ───────────────────────────────────
+//
+// The rooms are illusions, and the illusion is carried by shape: peripheral
+// vision resolves rhythm and contrast, not lexemes. A word in the scenery does
+// nothing for the atmosphere, and becomes legible only when you look straight at
+// it — which is exactly when it can lie. So every interactive thing in a room is
+// real, and decoration is wordless.
+//
+// With one distinction, because "no words" is the wrong rule by a hair: scenery
+// may name a SLOT or the SCENE, but may not assert a FACT. "To:" over an empty
+// line claims nothing — the room IS an unaddressed email. "Calibri" claimed the
+// font was Calibri and it wasn't; "Page 1 of 1" claimed a page count that was
+// always 1; "Send" named an action the button didn't perform. Those are checkable
+// assertions, and they were false.
+//
+// The allowlist is the point of this test, not an exemption from it: adding a
+// word to decoration means adding it here and arguing it names a slot or the
+// scene. Anything unlisted fails.
+const SCENERY_MAY_SAY = [
+	/^(To|Subject|Cc|Bcc):$/, // slots, visibly empty
+	/^-- INSERT --$/, // true whenever the writer is typing
+	/^~\/drafts$/, // Term's establishing shot, not a control
+	/^vi draft\.txt$/
+];
+await page.goto(BASE + '/', { waitUntil: 'networkidle' });
+for (const room of ['Bare', 'Scratch', 'Pad', 'Term', 'Mail', 'Doc', 'Post', 'Yours']) {
+	await tab(room).click();
+	await page.waitForTimeout(200);
+	const fake = await page.evaluate(() => {
+		// Decoration is marked aria-hidden. Read what it says — text node by text
+		// node, since a wrapper's textContent would glue "To:" and "Subject:" into
+		// one string that matches nothing.
+		const said = new Set();
+		for (const root of document.querySelectorAll('main [aria-hidden="true"]')) {
+			const walk = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+			let n;
+			while ((n = walk.nextNode())) {
+				const t = (n.nodeValue ?? '').trim();
+				if (t) said.add(t);
+			}
+		}
+		// Buttons a mouse can press: each must be a real control, i.e. reachable to
+		// a screen reader too. A pressable thing inside aria-hidden is a dead end.
+		const deadButtons = [...document.querySelectorAll('main button')].filter((b) =>
+			b.closest('[aria-hidden="true"]')
+		).length;
+		return { said: [...said], deadButtons };
+	});
+	const claims = fake.said.filter((t) => /[A-Za-z]{3,}/.test(t) && !SCENERY_MAY_SAY.some((ok) => ok.test(t)));
+	check(
+		`${room}: scenery makes no claim it cannot keep`,
+		claims.length === 0,
+		claims.length ? `decoration reading ${claims.map((c) => JSON.stringify(c)).join(', ')}` : ''
+	);
+	check(`${room}: no button a screen reader cannot reach`, fake.deadButtons === 0, `${fake.deadButtons} pressable control(s) inside decoration`);
 }
 
 // Both terminal guards, together and last, so an appended section can't fall

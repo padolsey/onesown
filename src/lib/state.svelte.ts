@@ -41,10 +41,6 @@ const OPEN_WARN_BYTES = 100 * 1024;
 
 let text = $state('');
 let shell = $state<ShellId>('bare');
-let mailTo = $state('');
-let mailSubject = $state('');
-let mailCc = $state('');
-let mailBcc = $state('');
 let selStart = $state(0);
 let selEnd = $state(0);
 let wantsFocus = $state(false);
@@ -69,10 +65,6 @@ let fileHandle: FileSystemFileHandle | null = null;
  */
 interface Snapshot {
 	text: string;
-	mailTo: string;
-	mailSubject: string;
-	mailCc: string;
-	mailBcc: string;
 	selStart: number;
 	selEnd: number;
 }
@@ -98,15 +90,11 @@ let justCleared = $state(false);
 let clearedSnapshot: Snapshot | null = null;
 
 function snapshot(): Snapshot {
-	return { text, mailTo, mailSubject, mailCc, mailBcc, selStart, selEnd };
+	return { text, selStart, selEnd };
 }
 
 function applySnapshot(s: Snapshot) {
 	text = s.text;
-	mailTo = s.mailTo;
-	mailSubject = s.mailSubject;
-	mailCc = s.mailCc;
-	mailBcc = s.mailBcc;
 	selStart = s.selStart;
 	selEnd = s.selEnd;
 	wantsFocus = true;
@@ -199,7 +187,7 @@ function persist() {
 	try {
 		localStorage.setItem(
 			STORAGE_KEY,
-			JSON.stringify({ v: 1, text, shell, mailTo, mailSubject, mailCc, mailBcc, savedAt: Date.now() })
+			JSON.stringify({ v: 1, text, shell, savedAt: Date.now() })
 		);
 		saveState = 'saved';
 	} catch {
@@ -236,10 +224,6 @@ function onStorage(e: StorageEvent) {
 	// recordEdit() and scheduleSave(), which would pollute undo and echo this
 	// tab's adoption straight back out to the other one.
 	text = d.text;
-	if (typeof d.mailTo === 'string') mailTo = d.mailTo;
-	if (typeof d.mailSubject === 'string') mailSubject = d.mailSubject;
-	if (typeof d.mailCc === 'string') mailCc = d.mailCc;
-	if (typeof d.mailBcc === 'string') mailBcc = d.mailBcc;
 	selStart = Math.min(selStart, text.length);
 	selEnd = Math.min(selEnd, text.length);
 	// Our history describes a draft that no longer exists anywhere. Keeping it
@@ -265,10 +249,6 @@ function load() {
 		if (raw) {
 			const d = JSON.parse(raw) as Record<string, unknown>;
 			if (typeof d.text === 'string') text = d.text;
-			if (typeof d.mailTo === 'string') mailTo = d.mailTo;
-			if (typeof d.mailSubject === 'string') mailSubject = d.mailSubject;
-			if (typeof d.mailCc === 'string') mailCc = d.mailCc;
-			if (typeof d.mailBcc === 'string') mailBcc = d.mailBcc;
 			if (typeof d.shell === 'string' && (SHELL_IDS as readonly string[]).includes(d.shell)) {
 				shell = d.shell as ShellId;
 			}
@@ -307,10 +287,6 @@ function clearDraft() {
 	clearedSnapshot = snapshot();
 	recordEdit(true);
 	text = '';
-	mailTo = '';
-	mailSubject = '';
-	mailCc = '';
-	mailBcc = '';
 	selStart = 0;
 	selEnd = 0;
 	fileHandle = null;
@@ -325,9 +301,7 @@ function clearDraft() {
  * stays — the note offering it expires, and losing a draft is unforgiving.
  */
 function requestClear(): boolean {
-	const empty =
-		text === '' && mailTo === '' && mailSubject === '' && mailCc === '' && mailBcc === '';
-	if (empty) {
+	if (text === '') {
 		clearDraft();
 		return true;
 	}
@@ -477,42 +451,6 @@ export const doc = {
 	},
 	get shell() {
 		return shell;
-	},
-	get mailTo() {
-		return mailTo;
-	},
-	set mailTo(v: string) {
-		if (v === mailTo) return;
-		recordEdit();
-		mailTo = v;
-		scheduleSave();
-	},
-	get mailSubject() {
-		return mailSubject;
-	},
-	set mailSubject(v: string) {
-		if (v === mailSubject) return;
-		recordEdit();
-		mailSubject = v;
-		scheduleSave();
-	},
-	get mailCc() {
-		return mailCc;
-	},
-	set mailCc(v: string) {
-		if (v === mailCc) return;
-		recordEdit();
-		mailCc = v;
-		scheduleSave();
-	},
-	get mailBcc() {
-		return mailBcc;
-	},
-	set mailBcc(v: string) {
-		if (v === mailBcc) return;
-		recordEdit();
-		mailBcc = v;
-		scheduleSave();
 	},
 	get selStart() {
 		return selStart;

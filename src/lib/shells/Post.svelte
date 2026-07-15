@@ -5,21 +5,16 @@
 
 	// Limit variant (Preferences → This room): 280 or 500 characters.
 	const LIMIT = $derived(prefs.postLimit);
-
-	let copied = $state(false);
 	const remaining = $derived(LIMIT - doc.chars);
-
-	async function post() {
-		try {
-			await navigator.clipboard.writeText(doc.text);
-			copied = true;
-			setTimeout(() => (copied = false), 2000);
-		} catch {
-			// clipboard unavailable — the button is a prop anyway
-		}
-	}
 </script>
 
+<!--
+	The counter and the warning are real; the rest is scenery, kept wordless. The
+	button used to say "Post" and copy to the clipboard — an action word on a thing
+	that did something else, which is the one combination guaranteed to confuse.
+	It's a coloured pill now: unmistakable from the corner of the eye, honest under
+	a direct look.
+-->
 <section
 	class="mx-auto w-full max-w-xl rounded-2xl border border-stone-200 bg-white p-4 shadow-sm"
 	style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;"
@@ -57,22 +52,15 @@
 			class="ml-auto mr-3 text-[13px] tabular-nums {remaining < 0
 				? 'font-semibold text-red-600'
 				: remaining <= 20
-					? 'text-amber-600'
+					? 'text-amber-700'
 					: 'text-stone-500'}"
 		>
 			{remaining}
 		</span>
 		<span class="sr-only" aria-live="polite">
-			{remaining < 0 ? `${-remaining} characters over the ${LIMIT} limit` : ''}
+			{remaining < 0 ? `Over the ${LIMIT} character limit` : ''}
 		</span>
-		<button
-			type="button"
-			onclick={post}
-			disabled={doc.chars === 0 || remaining < 0}
-			class="post-btn rounded-full bg-sky-500 px-4 py-1.5 text-[14px] font-bold text-white transition-colors hover:bg-sky-600 disabled:cursor-not-allowed disabled:opacity-40"
-		>
-			{copied ? 'Copied ✓' : 'Post'}
-		</button>
+		<span class="post-btn" aria-hidden="true"></span>
 	</div>
 	{#if remaining < 0}
 		<p class="mt-2 text-right text-[12px] text-red-600">{-remaining} over — the room is winning.</p>
@@ -80,11 +68,12 @@
 </section>
 
 <style>
-	/* White text on a blue pill, sitting on a white card: the global currentColor
-	   ring would be white on white. sky-600 (the button's own hover colour) rather
-	   than its sky-500 fill — 500 doesn't clear 3:1 against the card. */
-	.post-btn:focus-visible {
-		outline-color: var(--color-sky-600);
-		outline-offset: 3px;
+	/* Where Post was. The pill is the shape the eye expects in that corner. */
+	.post-btn {
+		display: block;
+		width: 3.75rem;
+		height: 1.9rem;
+		border-radius: 9999px;
+		background: var(--color-sky-500);
 	}
 </style>

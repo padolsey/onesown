@@ -16,9 +16,9 @@
 	class="flex flex-1 flex-col overflow-clip rounded-xl border border-stone-300/70 bg-[#e9e7e4] shadow-xl shadow-stone-900/10"
 	style="font-family: Calibri, Carlito, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;"
 >
-	<div class="flex shrink-0 items-center gap-1 border-b border-[#d5d2ce] bg-[#f7f5f2] px-3 py-1.5 text-stone-500">
-		<span class="select-none rounded border border-[#d5d2ce] bg-white px-2 py-0.5 text-[12px]" aria-hidden="true">Calibri</span>
-		<span class="select-none rounded border border-[#d5d2ce] bg-white px-1.5 py-0.5 text-[12px]" aria-hidden="true">11</span>
+	<div class="flex shrink-0 items-center gap-1 border-b border-[#d5d2ce] bg-[#f7f5f2] px-3 py-1.5 text-stone-600">
+		<span class="doc-chip w-16" aria-hidden="true"></span>
+		<span class="doc-chip w-7" aria-hidden="true"></span>
 		<span class="mx-1 h-4 w-px bg-[#d5d2ce]" aria-hidden="true"></span>
 		{#each commands as c (c.cmd)}
 			<button
@@ -35,7 +35,7 @@
 			</button>
 		{/each}
 		<span class="mx-1 h-4 w-px bg-[#d5d2ce]" aria-hidden="true"></span>
-		<span class="select-none text-[12px]" aria-hidden="true">A<span class="align-super text-[10px]">a</span></span>
+		<span class="doc-chip w-5" aria-hidden="true"></span>
 	</div>
 	<div class="ruler h-4 shrink-0 border-b border-[#d5d2ce] bg-[#f1efec]" aria-hidden="true"></div>
 	<div class="flex flex-1 flex-col px-3 pt-8 sm:px-8">
@@ -51,14 +51,25 @@
 		</div>
 	</div>
 	<footer
-		class="sticky bottom-0 flex shrink-0 select-none justify-between border-t border-[#d5d2ce] bg-[#f7f5f2] px-4 py-1 text-[12px] text-stone-500"
+		class="sticky bottom-0 flex shrink-0 items-center justify-between border-t border-[#d5d2ce] bg-[#f7f5f2] px-4 py-1 text-[12px] text-stone-600"
 	>
-		<span>Page 1 of 1 · {doc.words}{prefs.goal ? ` of ${prefs.goal}` : ''} words</span>
-		<span>English (UK) · 100%</span>
+		<span>{doc.words}{prefs.goal ? ` of ${prefs.goal}` : ''} words</span>
+		<span class="flex items-center gap-1.5" aria-hidden="true">
+			<span class="doc-chip w-8"></span>
+			<span class="doc-chip w-4"></span>
+		</span>
 	</footer>
 </section>
 
 <style>
+	/* Ribbon and status-bar furniture. A shape where a word was: it reads as a
+	   control from the periphery, and asserts nothing under a direct look. */
+	.doc-chip {
+		display: inline-block;
+		height: 0.85rem;
+		border-radius: 0.2rem;
+		background: #dcd8d2;
+	}
 	.doc-serif {
 		font-family: Georgia, serif;
 	}
