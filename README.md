@@ -1,6 +1,7 @@
 # A Room of One's Own
 
-One draft, seven rooms. A notepad that swaps the app around your words.
+**https://onesown.app** — one draft, seven rooms. A notepad that swaps the app
+around your words.
 
 What you write is shaped by what you write *into*. This is a single plain-text
 draft you can move between seven "rooms" — a quiet page, a scratch file, a
@@ -43,16 +44,26 @@ hostile-input idempotence sweep. It looks for a `chrome-headless-shell` under
 
 ## Deploy
 
-Deployed as an **assets-only Cloudflare Worker** — the site is fully
-prerendered (`@sveltejs/adapter-static`), so no server code ships at all:
-
-```bash
-pnpm deploy     # vite build + wrangler deploy
-```
+Deployed as an **assets-only Cloudflare Worker** at https://onesown.app — the
+site is fully prerendered (`@sveltejs/adapter-static`), so no server code
+ships at all. Production deploys run automatically via **Cloudflare Workers
+Builds** on push to `main`; `pnpm deploy` exists for emergencies only (see
+[DEPLOYMENT_VERIFICATION.md](DEPLOYMENT_VERIFICATION.md)).
 
 If server routes are ever needed, swap `@sveltejs/adapter-static` for
 `@sveltejs/adapter-cloudflare` in `svelte.config.js` and point `wrangler.jsonc`
 at the generated worker.
+
+## Verified deployment
+
+The deployment is designed to be **independently verifiable**: builds are
+bit-for-bit reproducible, every deploy publishes its commit SHA at
+[`/.well-known/deployment.json`](https://onesown.app/.well-known/deployment.json),
+and `node scripts/verify-deployment.mjs` proves the served bytes match a local
+build of the public source. A strict CSP (browser-enforced) forbids requests
+to any other origin, and the e2e suite fails on any cross-origin request.
+Human-readable version at [/verify](https://onesown.app/verify); full trust
+model in [DEPLOYMENT_VERIFICATION.md](DEPLOYMENT_VERIFICATION.md).
 
 ## Supply-chain posture
 

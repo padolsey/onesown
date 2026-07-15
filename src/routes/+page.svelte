@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { Component } from 'svelte';
+	import { version } from '$app/environment';
 	import { doc, type ShellId } from '$lib/state.svelte';
 	import { shellList } from '$lib/shells';
 	import Bare from '$lib/shells/Bare.svelte';
@@ -68,7 +69,9 @@
 		name="description"
 		content="A notepad with interchangeable rooms — write the same draft inside a quiet page, a scratch file, a legal pad, a terminal, an unsent email, an office doc, or a 280-character box, and notice what each room does to your voice."
 	/>
+	<link rel="canonical" href="https://onesown.app/" />
 	<meta property="og:type" content="website" />
+	<meta property="og:url" content="https://onesown.app/" />
 	<meta property="og:title" content="A Room of One’s Own" />
 	<meta property="og:description" content="One draft, seven rooms. A notepad that swaps the app around your words." />
 	<meta name="twitter:card" content="summary" />
@@ -128,6 +131,11 @@
 			downloads one instead. Formatting lives in the draft as plain markers (**bold**, *italics*) —
 			rooms that can render it do, and rooms that can’t show the markers. Same words, different
 			room: the register shift is the experiment.
+		</p>
+		<p class="room-note mt-2">
+			<a class="room-link" href="/verify">Verify this deployment</a> — reproducibly built from the
+			<a class="room-link" href="https://github.com/padolsey/onesown">public source</a> at commit
+			<code>{version.slice(0, 7)}</code>.
 		</p>
 	</div>
 </div>
@@ -228,5 +236,12 @@
 		color: var(--muted);
 		font-size: 0.75rem;
 		line-height: 1.6;
+	}
+	.room-link {
+		text-decoration: underline;
+		text-underline-offset: 2px;
+	}
+	.room-link:hover {
+		color: var(--fg);
 	}
 </style>

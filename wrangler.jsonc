@@ -1,9 +1,14 @@
 // Assets-only Cloudflare Worker: no server code, just the prerendered build.
-// Deploy: pnpm deploy  (build + `wrangler deploy`)
+// Production deploys run through Cloudflare Workers Builds from `main`
+// (see DEPLOYMENT_VERIFICATION.md); `pnpm deploy` exists for emergencies only.
 {
 	"$schema": "node_modules/wrangler/config-schema.json",
 	"name": "onesown",
 	"compatibility_date": "2026-07-01",
+	// Canonical origin. workers.dev stays enabled until onesown.app is
+	// confirmed live everywhere — then add "workers_dev": false so there is
+	// exactly one origin to verify.
+	"routes": [{ "pattern": "onesown.app", "custom_domain": true }],
 	"assets": {
 		"directory": "./build"
 	}

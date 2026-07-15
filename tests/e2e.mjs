@@ -39,6 +39,12 @@ const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 }, a
 const page = await ctx.newPage();
 const pageErrors = [];
 page.on('pageerror', (e) => pageErrors.push(String(e)));
+// Privacy regression guard: the app must never talk to another origin.
+const crossOrigin = [];
+page.on('request', (r) => {
+	const url = r.url();
+	if (/^https?:/.test(url) && !url.startsWith(BASE + '/') && url !== BASE) crossOrigin.push(url);
+});
 
 const tab = (name) => page.locator('button.room-tab').filter({ hasText: new RegExp('^' + name + '$') });
 const textarea = () => page.locator('textarea');
@@ -244,6 +250,35 @@ for (const shell of ['Bare', 'Scratch', 'Pad', 'Term', 'Mail', 'Doc', 'Post']) {
 	await page.screenshot({ path: path.join(SHOTS, `${shell.toLowerCase()}.png`) });
 }
 check('no page JS errors', pageErrors.length === 0, pageErrors.slice(0, 3).join(' | '));
+
+// ── 12. Verification surface ─────────────────────────────────────────────────
+check('footer links to /verify', (await page.locator('a[href="/verify"]').count()) === 1);
+await page.goto(BASE + '/verify', { waitUntil: 'networkidle' });
+const shownCommit = ((await page.locator('[data-commit]').textContent()) ?? '').trim();
+check('verify page shows full commit', /^[0-9a-f]{40}$/.test(shownCommit), shownCommit);
+const attestation = await page.evaluate(async () => {
+	const r = await fetch('/.well-known/deployment.json').catch(() => null);
+	return r && r.ok ? await r.json() : null;
+});
+if (attestation) {
+	check('attestation commit matches page', attestation.commit === shownCommit,
+		`att=${attestation.commit?.slice(0, 7)} page=${shownCommit.slice(0, 7)}`);
+	check('attestation names public repo', String(attestation.repository).includes('github.com/padolsey/onesown'));
+	check('verify page confirms match', (await page.locator('.v-facts').textContent()).includes('matches this page ✓'));
+} else {
+	console.log('SKIP  attestation checks (deployment.json not served — dev build)');
+}
+const isDeployed = !/localhost|127\.0\.0\.1/.test(BASE);
+if (isDeployed) {
+	const res = await page.request.get(BASE + '/');
+	const h = res.headers();
+	check('security headers served', h['x-content-type-options'] === 'nosniff' &&
+		(h['content-security-policy'] || '').includes("frame-ancestors 'none'"), JSON.stringify(h['content-security-policy'] ?? null));
+	check('csp meta present', (await page.locator('meta[http-equiv="content-security-policy" i]').count()) >= 1);
+}
+
+// Must be last: every request made during the entire run stays same-origin.
+check('no cross-origin requests', crossOrigin.length === 0, crossOrigin.slice(0, 3).join(' '));
 
 await browser.close();
 const failed = results.filter((r) => !r.ok);

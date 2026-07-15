@@ -1,0 +1,47 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # corepack reads the pinned packageManager (pnpm + integrity hash)
+      - run: corepack enable
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm check
+
+      - run: pnpm test:unit
+
+      - run: pnpm build
+
+      - name: deployment metadata is present and sane
+        run: |
+          node -e '
+            const m = JSON.parse(require("node:fs").readFileSync("build/.well-known/deployment.json", "utf8"));
+            if (!/^[0-9a-f]{40}$/.test(m.commit)) throw new Error("bad commit: " + m.commit);
+            if (!m.repository.includes("github.com/padolsey/onesown")) throw new Error("bad repository");
+            if (!m.commitUrl.endsWith(m.commit)) throw new Error("commitUrl/commit mismatch");
+            console.log("metadata ok:", m.commit);
+          '
+
+      # The verification story rests on builds being deterministic: build twice,
+      # require identical bytes (deployment.json carries a build timestamp by
+      # design, so it is excluded — verify-deployment.mjs cross-checks it).
+      - name: build is reproducible
+        run: |
+          mv build build-first
+          pnpm build
+          rm build/.well-known/deployment.json build-first/.well-known/deployment.json
+          diff -r build-first build
