@@ -1,0 +1,15 @@
+# Supply-chain hardening (pnpm ≥10 reads settings from this file).
+#
+# minimumReleaseAge: refuse to resolve any package version published less than
+# 3 days ago — a compromised release gets caught/yanked before it can land here.
+# Bump a dep past this window with an entry in minimumReleaseAgeExclude if ever
+# genuinely urgent.
+minimumReleaseAge: 4320
+
+# No dependency is allowed to run lifecycle (install/postinstall) scripts.
+# These three ask to; all ship prebuilt platform binaries via
+# optionalDependencies, so their scripts are unnecessary fallbacks.
+allowBuilds:
+  esbuild: false
+  sharp: false
+  workerd: false

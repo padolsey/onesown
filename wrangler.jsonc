@@ -1,0 +1,10 @@
+// Assets-only Cloudflare Worker: no server code, just the prerendered build.
+// Deploy: pnpm deploy  (build + `wrangler deploy`)
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "onesown",
+	"compatibility_date": "2026-07-01",
+	"assets": {
+		"directory": "./build"
+	}
+}
