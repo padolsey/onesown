@@ -11,6 +11,15 @@
   Cross-Origin-Resource-Policy: same-origin
   Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()
 
+# The service worker is the one context the page's CSP cannot reach: a worker's
+# policy comes from its own script's response headers, and a <meta> tag binds
+# only the document. Without this the worker could fetch any origin — it doesn't
+# (it early-returns on cross-origin, and it is byte-verified), but "nothing
+# leaves the page" should be enforced by the browser here too, not just intended.
+# `connect-src 'self'` covers both fetch and the Cache API.
+/service-worker.js
+  Content-Security-Policy: default-src 'none'; connect-src 'self'; script-src 'self'
+
 # Content-hashed assets never change — cache forever.
 /_app/immutable/*
   Cache-Control: public, max-age=31536000, immutable

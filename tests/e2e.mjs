@@ -40,10 +40,28 @@ const page = await ctx.newPage();
 const pageErrors = [];
 page.on('pageerror', (e) => pageErrors.push(String(e)));
 // Privacy regression guard: the app must never talk to another origin.
+//
+// Listen on the CONTEXT, not the page: Chromium reports service-worker-initiated
+// requests against the BrowserContext, and the worker is the one JS context on
+// the origin the page's meta CSP cannot govern. page.on('request') never sees
+// them, which is exactly where a leak would be invisible.
 const crossOrigin = [];
-page.on('request', (r) => {
+const sameOrigin = (url) => {
+	try {
+		return new URL(url).origin === new URL(BASE).origin;
+	} catch {
+		return false;
+	}
+};
+ctx.on('request', (r) => {
 	const url = r.url();
-	if (/^https?:/.test(url) && !url.startsWith(BASE + '/') && url !== BASE) crossOrigin.push(url);
+	if (/^https?:/.test(url) && !sameOrigin(url)) crossOrigin.push(url);
+});
+// WebSockets are not reported as requests by either listener, so they need their
+// own. Compare origins rather than prefixing BASE — the dev server's HMR socket
+// is same-origin on a different scheme and must not read as a leak.
+page.on('websocket', (ws) => {
+	if (!sameOrigin(ws.url().replace(/^ws/, 'http'))) crossOrigin.push(ws.url());
 });
 
 const tab = (name) => page.locator('button.room-tab').filter({ hasText: new RegExp('^' + name + '$') });
