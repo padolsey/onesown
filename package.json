@@ -9,7 +9,7 @@
 		"build": "vite build && node scripts/emit-deployment-metadata.mjs",
 		"preview": "vite preview",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
-		"test:unit": "node --experimental-strip-types --test tests/markers.test.ts",
+		"test:unit": "node --experimental-strip-types --test tests/markers.test.ts tests/palette.test.ts",
 		"test:e2e": "node tests/e2e.mjs",
 		"deploy": "pnpm build && wrangler deploy"
 	},
