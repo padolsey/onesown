@@ -59,6 +59,9 @@
 	   stretches to match, so the page scrolls instead of the textarea. */
 	.grow-wrap {
 		display: grid;
+		/* Fill the room's editor slot when the room lays one out as a flex
+		   column; ignored in rooms that size the editor by content (Post). */
+		flex: 1;
 	}
 	.grow-wrap::after {
 		content: attr(data-value) ' ';

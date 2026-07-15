@@ -99,7 +99,6 @@
 
 <div
 	class="room-app flex min-h-dvh flex-col"
-	class:focused={prefs.focus}
 	class:theme-dark={prefs.theme === 'dark'}
 	class:theme-light={prefs.theme === 'light'}
 >
@@ -243,7 +242,7 @@
 		</header>
 	{/if}
 
-	<main class="flex-1 px-2 pb-2 sm:px-3">
+	<main class="room-main flex-1 p-2 sm:p-3">
 		<ShellView />
 	</main>
 
@@ -295,15 +294,18 @@
 		--fg: #2f2b25;
 		--muted: #6c6456;
 		--line: #d9d3c7;
-		/* Approximate height of topbar+footer; rooms size their editors to
-		   100dvh minus this (plus their own internal chrome). */
-		--chrome: 7rem;
 		background: var(--bg);
 		color: var(--fg);
 		font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
 	}
-	.room-app.focused {
-		--chrome: 1.5rem;
+	/* The writing area. Rooms that fill (every one but Post) stretch to this
+	   box, so nothing measures the chrome — the flex column above already did.
+	   `safe` keeps a room that outgrows the viewport reachable from its top
+	   rather than centred and clipped. */
+	.room-main {
+		display: flex;
+		flex-direction: column;
+		justify-content: safe center;
 	}
 	@media (prefers-color-scheme: dark) {
 		.room-app:not(.theme-light) {

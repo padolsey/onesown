@@ -25,11 +25,11 @@
 </script>
 
 <section
-	class="rounded-2xl border shadow-sm"
+	class="flex flex-1 flex-col rounded-2xl border shadow-sm"
 	style="background: {paper.bg}; border-color: {paper.line};"
 >
 	<div
-		class="flex flex-wrap items-center gap-x-4 gap-y-1.5 border-b px-4 py-2 text-[11px]"
+		class="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-1.5 border-b px-4 py-2 text-[11px]"
 		style="border-color: {paper.line}; color: {paper.muted};"
 	>
 		{#each options as opt (opt.key)}
@@ -49,8 +49,8 @@
 		{/each}
 	</div>
 	<div
-		class="mx-auto px-6 py-10 leading-[1.75] sm:px-8"
-		style="max-width: {width}; font-family: {font}; font-size: {size}; color: {ink}; --editor-caret: {ink}; --editor-selection: color-mix(in srgb, {ink} 22%, transparent); --editor-min: max(16rem, calc(100dvh - var(--chrome, 7rem) - 12rem));"
+		class="mx-auto flex w-full flex-1 flex-col px-6 py-10 leading-[1.75] sm:px-8"
+		style="max-width: {width}; font-family: {font}; font-size: {size}; color: {ink}; --editor-caret: {ink}; --editor-selection: color-mix(in srgb, {ink} 22%, transparent); --editor-min: 16rem;"
 	>
 		<Editor spell={true} placeholder="Your room. Your rules." label="Draft — your room" />
 	</div>

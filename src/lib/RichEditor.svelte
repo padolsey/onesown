@@ -113,6 +113,8 @@
 <style>
 	.rich {
 		min-height: var(--editor-min, 40vh);
+		/* Fill the room's editor slot when the room lays one out as a flex column. */
+		flex: 1;
 		white-space: pre-wrap;
 		overflow-wrap: anywhere;
 		caret-color: var(--editor-caret, currentColor);

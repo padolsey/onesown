@@ -27,8 +27,10 @@
 	);
 </script>
 
-<section class="mx-auto max-w-4xl overflow-clip rounded-xl bg-[#0b0e0c] shadow-2xl shadow-black/40 ring-1 ring-black/60">
-	<header class="relative flex items-center bg-[#181c19] px-4 py-2.5">
+<section
+	class="mx-auto flex w-full max-w-4xl flex-1 flex-col overflow-clip rounded-xl bg-[#0b0e0c] shadow-2xl shadow-black/40 ring-1 ring-black/60"
+>
+	<header class="relative flex shrink-0 items-center bg-[#181c19] px-4 py-2.5">
 		<span class="flex gap-2" aria-hidden="true">
 			<span class="h-3 w-3 rounded-full bg-[#f25d51]"></span>
 			<span class="h-3 w-3 rounded-full bg-[#fbbe3c]"></span>
@@ -42,18 +44,18 @@
 		</span>
 	</header>
 	<div
-		class="px-4 py-5 text-[14px] leading-[1.7] sm:px-6"
-		style="font-family: {mono}; color: {P.text}; --editor-caret: {P.caret}; --editor-selection: {P.selection}; --editor-min: max(16rem, calc(100dvh - var(--chrome, 7rem) - 12rem));"
+		class="flex flex-1 flex-col px-4 py-5 text-[14px] leading-[1.7] sm:px-6"
+		style="font-family: {mono}; color: {P.text}; --editor-caret: {P.caret}; --editor-selection: {P.selection}; --editor-min: 16rem;"
 	>
-		<p class="mb-3 select-none" style="color: {P.prompt};" aria-hidden="true">
+		<p class="mb-3 shrink-0 select-none" style="color: {P.prompt};" aria-hidden="true">
 			~/drafts <span style="color: {P.promptAccent};">$</span> vi draft.txt
 		</p>
-		<div class="max-w-[80ch]">
+		<div class="flex w-full max-w-[80ch] flex-1 flex-col">
 			<Editor label="Draft — terminal buffer" />
 		</div>
 	</div>
 	<footer
-		class="sticky bottom-0 flex select-none justify-between bg-[#181c19] px-4 py-1.5 text-[12px]"
+		class="sticky bottom-0 flex shrink-0 select-none justify-between bg-[#181c19] px-4 py-1.5 text-[12px]"
 		style="font-family: {mono}; color: {P.footer};"
 	>
 		<span aria-hidden="true">-- INSERT --</span>

@@ -11,14 +11,14 @@
 </script>
 
 <section
-	class="mx-auto max-w-2xl overflow-hidden rounded-md shadow-lg shadow-stone-900/20"
+	class="mx-auto flex w-full max-w-2xl flex-1 flex-col overflow-hidden rounded-md shadow-lg shadow-stone-900/20"
 	style="background: {paper.bg};"
 >
-	<div class="h-3 border-b" style="background: {paper.strip}; border-color: {paper.stripLine};"></div>
-	<div class="pad-paper">
+	<div class="h-3 shrink-0 border-b" style="background: {paper.strip}; border-color: {paper.stripLine};"></div>
+	<div class="pad-paper flex flex-1 flex-col">
 		<div
-			class="pad-ink text-[17px] leading-[28px] text-[#2b4a9e]"
-			style="font-family: 'Bradley Hand', 'Segoe Print', 'Comic Sans MS', 'Comic Neue', cursive; --editor-caret: #2b4a9e; --editor-selection: rgba(43, 74, 158, 0.18); --editor-min: max(16rem, calc(100dvh - var(--chrome, 7rem) - 11rem));"
+			class="pad-ink flex flex-1 flex-col text-[17px] leading-[28px] text-[#2b4a9e]"
+			style="font-family: 'Bradley Hand', 'Segoe Print', 'Comic Sans MS', 'Comic Neue', cursive; --editor-caret: #2b4a9e; --editor-selection: rgba(43, 74, 158, 0.18); --editor-min: 16rem;"
 		>
 			<Editor label="Draft — legal pad" />
 		</div>

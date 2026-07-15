@@ -147,11 +147,11 @@
 <svelte:window onclick={() => (openMenu = null)} onkeydown={onWindowKeydown} />
 
 <section
-	class="bevel-out mx-auto max-w-3xl bg-[#c0c0c0] p-[3px] shadow-[4px_4px_0_rgba(0,0,0,0.25)]"
+	class="bevel-out mx-auto flex w-full max-w-3xl flex-1 flex-col bg-[#c0c0c0] p-[3px] shadow-[4px_4px_0_rgba(0,0,0,0.25)]"
 	style="font-family: Tahoma, 'Segoe UI', 'MS Sans Serif', sans-serif;"
 >
 	<header
-		class="flex items-center gap-2 px-1.5 py-1 text-white"
+		class="flex shrink-0 items-center gap-2 px-1.5 py-1 text-white"
 		style="background: linear-gradient(90deg, #000080, #1084d0);"
 	>
 		<span class="flex-1 select-none text-[12px] font-bold tracking-tight">untitled.txt — scratchpad</span>
@@ -161,7 +161,7 @@
 			<span class="btn95">✕</span>
 		</span>
 	</header>
-	<nav class="flex gap-0.5 px-1 py-0.5 text-[12px] text-black" aria-label="Scratchpad menu">
+	<nav class="flex shrink-0 gap-0.5 px-1 py-0.5 text-[12px] text-black" aria-label="Scratchpad menu">
 		{#each menus as menu (menu.name)}
 			<span class="relative">
 				<button
@@ -204,16 +204,16 @@
 			</span>
 		{/each}
 	</nav>
-	<div class="bevel-in scratch-body bg-white">
+	<div class="bevel-in scratch-body flex flex-1 flex-col bg-white">
 		<div
-			class="px-2 py-1.5 text-[13.5px] leading-[1.45] text-black"
-			style="font-family: Consolas, 'Lucida Console', 'Courier New', monospace; --editor-caret: #000000; --editor-selection: #000080; --editor-selection-fg: #ffffff; --editor-min: max(16rem, calc(100dvh - var(--chrome, 7rem) - 9rem));"
+			class="flex flex-1 flex-col px-2 py-1.5 text-[13.5px] leading-[1.45] text-black"
+			style="font-family: Consolas, 'Lucida Console', 'Courier New', monospace; --editor-caret: #000000; --editor-selection: #000080; --editor-selection-fg: #ffffff; --editor-min: 16rem;"
 		>
 			<Editor label="Draft — scratch file" nowrap={!wordWrap} />
 		</div>
 	</div>
 	{#if statusBar}
-		<footer class="sticky bottom-0 flex gap-[3px] bg-[#c0c0c0] px-[2px] py-[2px] text-[11.5px] text-black">
+		<footer class="sticky bottom-0 flex shrink-0 gap-[3px] bg-[#c0c0c0] px-[2px] py-[2px] text-[11.5px] text-black">
 			<span class="bevel-in flex-1 px-2 py-0.5">Ln {doc.line}, Col {doc.col}</span>
 			{#if prefs.goal}
 				<span class="bevel-in px-2 py-0.5">{doc.words}/{prefs.goal}w</span>

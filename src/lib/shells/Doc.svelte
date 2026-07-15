@@ -13,10 +13,10 @@
 </script>
 
 <section
-	class="overflow-clip rounded-xl border border-stone-300/70 bg-[#e9e7e4] shadow-xl shadow-stone-900/10"
+	class="flex flex-1 flex-col overflow-clip rounded-xl border border-stone-300/70 bg-[#e9e7e4] shadow-xl shadow-stone-900/10"
 	style="font-family: Calibri, Carlito, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;"
 >
-	<div class="flex items-center gap-1 border-b border-[#d5d2ce] bg-[#f7f5f2] px-3 py-1.5 text-stone-500">
+	<div class="flex shrink-0 items-center gap-1 border-b border-[#d5d2ce] bg-[#f7f5f2] px-3 py-1.5 text-stone-500">
 		<span class="select-none rounded border border-[#d5d2ce] bg-white px-2 py-0.5 text-[12px]" aria-hidden="true">Calibri</span>
 		<span class="select-none rounded border border-[#d5d2ce] bg-white px-1.5 py-0.5 text-[12px]" aria-hidden="true">11</span>
 		<span class="mx-1 h-4 w-px bg-[#d5d2ce]" aria-hidden="true"></span>
@@ -37,21 +37,21 @@
 		<span class="mx-1 h-4 w-px bg-[#d5d2ce]" aria-hidden="true"></span>
 		<span class="select-none text-[12px]" aria-hidden="true">A<span class="align-super text-[10px]">a</span></span>
 	</div>
-	<div class="ruler h-4 border-b border-[#d5d2ce] bg-[#f1efec]" aria-hidden="true"></div>
-	<div class="px-3 py-8 sm:px-8">
+	<div class="ruler h-4 shrink-0 border-b border-[#d5d2ce] bg-[#f1efec]" aria-hidden="true"></div>
+	<div class="flex flex-1 flex-col px-3 pt-8 sm:px-8">
 		<div
-			class="mx-auto w-[50rem] max-w-full bg-white px-[clamp(1.5rem,7vw,6rem)] py-[clamp(2rem,7vw,6rem)] shadow-[0_2px_8px_rgba(0,0,0,0.18)]"
+			class="mx-auto flex w-[50rem] max-w-full flex-1 flex-col bg-white px-[clamp(1.5rem,7vw,6rem)] py-[clamp(2rem,7vw,6rem)] shadow-[0_2px_8px_rgba(0,0,0,0.18)]"
 		>
 			<div
-				class="text-[14.5px] leading-[1.45] text-[#1f1f1f]"
-				style="--editor-caret: #185abd; --editor-selection: rgba(58, 118, 216, 0.25); --editor-min: max(14rem, calc(100dvh - var(--chrome, 7rem) - 21rem));"
+				class="flex flex-1 flex-col text-[14.5px] leading-[1.45] text-[#1f1f1f]"
+				style="--editor-caret: #185abd; --editor-selection: rgba(58, 118, 216, 0.25); --editor-min: 14rem;"
 			>
 				<RichEditor bind:this={editor} spell={true} label="Draft — office document" />
 			</div>
 		</div>
 	</div>
 	<footer
-		class="sticky bottom-0 flex select-none justify-between border-t border-[#d5d2ce] bg-[#f7f5f2] px-4 py-1 text-[12px] text-stone-500"
+		class="sticky bottom-0 flex shrink-0 select-none justify-between border-t border-[#d5d2ce] bg-[#f7f5f2] px-4 py-1 text-[12px] text-stone-500"
 	>
 		<span>Page 1 of 1 · {doc.words}{prefs.goal ? ` of ${prefs.goal}` : ''} words</span>
 		<span>English (UK) · 100%</span>

@@ -21,7 +21,7 @@
 </script>
 
 <section
-	class="mx-auto max-w-xl rounded-2xl border border-stone-200 bg-white p-4 shadow-sm"
+	class="mx-auto w-full max-w-xl rounded-2xl border border-stone-200 bg-white p-4 shadow-sm"
 	style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;"
 >
 	<div class="flex gap-3">

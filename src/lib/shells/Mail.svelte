@@ -24,13 +24,13 @@
 </script>
 
 <section
-	class="mx-auto max-w-3xl overflow-clip rounded-xl border border-stone-300/70 bg-white shadow-2xl shadow-stone-900/10"
+	class="mx-auto flex w-full max-w-3xl flex-1 flex-col overflow-clip rounded-xl border border-stone-300/70 bg-white shadow-2xl shadow-stone-900/10"
 	style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;"
 >
-	<header class="flex items-center justify-center border-b border-stone-200 bg-gradient-to-b from-stone-100 to-stone-50 px-4 py-2.5">
+	<header class="flex shrink-0 items-center justify-center border-b border-stone-200 bg-gradient-to-b from-stone-100 to-stone-50 px-4 py-2.5">
 		<span class="select-none text-[13px] font-medium text-stone-500">New Message</span>
 	</header>
-	<div class="flex items-center border-b border-stone-100 px-4">
+	<div class="flex shrink-0 items-center border-b border-stone-100 px-4">
 		<label class="w-16 select-none py-2 text-[13px] text-stone-400" for="mail-to">To:</label>
 		<input
 			id="mail-to"
@@ -49,7 +49,7 @@
 		</button>
 	</div>
 	{#if showCcBcc}
-		<div class="flex items-center border-b border-stone-100 px-4">
+		<div class="flex shrink-0 items-center border-b border-stone-100 px-4">
 			<label class="w-16 select-none py-2 text-[13px] text-stone-400" for="mail-cc">Cc:</label>
 			<input
 				id="mail-cc"
@@ -59,7 +59,7 @@
 				spellcheck="false"
 			/>
 		</div>
-		<div class="flex items-center border-b border-stone-100 px-4">
+		<div class="flex shrink-0 items-center border-b border-stone-100 px-4">
 			<label class="w-16 select-none py-2 text-[13px] text-stone-400" for="mail-bcc">Bcc:</label>
 			<input
 				id="mail-bcc"
@@ -70,7 +70,7 @@
 			/>
 		</div>
 	{/if}
-	<div class="flex items-center border-b border-stone-100 px-4">
+	<div class="flex shrink-0 items-center border-b border-stone-100 px-4">
 		<label class="w-16 select-none py-2 text-[13px] text-stone-400" for="mail-subject">Subject:</label>
 		<input
 			id="mail-subject"
@@ -80,12 +80,12 @@
 		/>
 	</div>
 	<div
-		class="px-4 py-4 text-[14px] leading-[1.55] text-[#1f2328]"
-		style="--editor-caret: #1a73e8; --editor-selection: rgba(26, 115, 232, 0.22); --editor-min: max(14rem, calc(100dvh - var(--chrome, 7rem) - 16rem));"
+		class="flex flex-1 flex-col px-4 py-4 text-[14px] leading-[1.55] text-[#1f2328]"
+		style="--editor-caret: #1a73e8; --editor-selection: rgba(26, 115, 232, 0.22); --editor-min: 14rem;"
 	>
 		<RichEditor bind:this={editor} spell={true} label="Draft — email body" />
 	</div>
-	<footer class="flex items-center gap-1 border-t border-stone-100 px-4 py-3">
+	<footer class="flex shrink-0 items-center gap-1 border-t border-stone-100 px-4 py-3">
 		<button
 			type="button"
 			onclick={send}
