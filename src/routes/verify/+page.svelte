@@ -37,7 +37,7 @@
 	<div class="mx-auto max-w-2xl px-4 pb-20 pt-10 sm:px-6">
 		<header class="flex flex-wrap items-baseline gap-x-3 gap-y-1">
 			<a href="/" class="v-wordmark">A Room of One’s Own</a>
-			<p class="v-muted text-[0.95rem]">verify this deployment</p>
+			<h1 class="v-muted text-[0.95rem] font-normal">verify this deployment</h1>
 		</header>
 
 		<section class="mt-8">

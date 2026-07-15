@@ -7,7 +7,7 @@
 	<div class="pad-paper">
 		<div
 			class="pad-ink text-[17px] leading-[28px] text-[#2b4a9e]"
-			style="font-family: 'Bradley Hand', 'Segoe Print', 'Comic Sans MS', 'Comic Neue', cursive; --editor-caret: #2b4a9e; --editor-selection: rgba(43, 74, 158, 0.18); --editor-min: 55vh;"
+			style="font-family: 'Bradley Hand', 'Segoe Print', 'Comic Sans MS', 'Comic Neue', cursive; --editor-caret: #2b4a9e; --editor-selection: rgba(43, 74, 158, 0.18); --editor-min: 60vh;"
 		>
 			<Editor label="Draft — legal pad" />
 		</div>

@@ -1,5 +1,17 @@
 @import 'tailwindcss';
 
+/* Match the paper palette at the document level so overscroll/rubber-banding
+   and native UI (scrollbars, form controls) don't flash a mismatched color. */
+html {
+	background: #f2efe9;
+	color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+	html {
+		background: #191817;
+	}
+}
+
 /* Respect user's motion preferences */
 @media (prefers-reduced-motion: reduce) {
 	*,

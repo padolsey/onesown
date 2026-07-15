@@ -21,7 +21,7 @@
 	</header>
 	<div
 		class="px-4 py-5 text-[14px] leading-[1.7] text-[#b6e3ae] sm:px-6"
-		style="font-family: {mono}; --editor-caret: #4ade80; --editor-selection: rgba(74, 222, 128, 0.28); --editor-min: 50vh;"
+		style="font-family: {mono}; --editor-caret: #4ade80; --editor-selection: rgba(74, 222, 128, 0.28); --editor-min: 55vh;"
 	>
 		<p class="mb-3 select-none text-[#4f7a4a]" aria-hidden="true">~/drafts <span class="text-[#8eb886]">$</span> vi draft.txt</p>
 		<div class="max-w-[80ch]">

@@ -81,7 +81,7 @@
 	</div>
 	<div
 		class="px-4 py-4 text-[14px] leading-[1.55] text-[#1f2328]"
-		style="--editor-caret: #1a73e8; --editor-selection: rgba(26, 115, 232, 0.22); --editor-min: 45vh;"
+		style="--editor-caret: #1a73e8; --editor-selection: rgba(26, 115, 232, 0.22); --editor-min: 50vh;"
 	>
 		<RichEditor bind:this={editor} spell={true} label="Draft — email body" />
 	</div>

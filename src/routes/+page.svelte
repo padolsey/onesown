@@ -83,18 +83,13 @@
 <svelte:document onvisibilitychange={onVisibilityChange} />
 
 <div class="room-app min-h-screen">
-	<div class="mx-auto max-w-5xl px-4 pb-20 pt-10 sm:px-6 lg:px-8">
+	<div class="mx-auto max-w-5xl px-4 pb-14 pt-4 sm:px-6 sm:pt-6 lg:px-8">
 		<header class="flex flex-wrap items-baseline gap-x-3 gap-y-1">
 			<h1 class="room-wordmark">A Room of One’s Own</h1>
 			<p class="room-tagline">change the room your writing lives in</p>
 		</header>
-		<p class="room-intro mt-3 max-w-2xl">
-			One draft, seven rooms. What you write is shaped by what you write <em>into</em> — swap the
-			room around your words and notice what it does to your voice. Every room keeps its own
-			lighting.
-		</p>
 
-		<div class="mt-8 flex flex-wrap items-center gap-x-4 gap-y-3">
+		<div class="mt-3 flex flex-wrap items-center gap-x-4 gap-y-3" role="group" aria-label="Rooms and draft actions">
 			<div class="flex max-w-full gap-1.5 overflow-x-auto">
 				{#each shellList as s (s.id)}
 					<button
@@ -121,22 +116,26 @@
 			</div>
 		</div>
 
-		<div class="mt-4">
+		<main class="mt-3">
 			<ShellView />
-		</div>
+		</main>
 
-		<p class="room-note mt-6">
-			Nothing you write leaves this page. The draft autosaves to this browser’s local storage, and
-			Save to disk writes a plain .txt file — in browsers without the File System Access API it
-			downloads one instead. Formatting lives in the draft as plain markers (**bold**, *italics*) —
-			rooms that can render it do, and rooms that can’t show the markers. Same words, different
-			room: the register shift is the experiment.
-		</p>
-		<p class="room-note mt-2">
-			<a class="room-link" href="/verify">Verify this deployment</a> — reproducibly built from the
-			<a class="room-link" href="https://github.com/padolsey/onesown">public source</a> at commit
-			<code>{version.slice(0, 7)}</code>.
-		</p>
+		<footer class="mt-6">
+			<p class="room-note">
+				One draft, seven rooms — what you write is shaped by what you write <em>into</em>. Nothing
+				you write leaves this page: the draft autosaves to this browser’s local storage, and Save
+				to disk writes a plain .txt file (browsers without the File System Access API download one
+				instead). Formatting lives in the draft as plain markers (**bold**, *italics*) — rooms
+				that can render it do, and rooms that can’t show the markers.
+			</p>
+			<p class="room-note mt-2">
+				<a class="room-link" href="/verify">Verify this deployment</a> — reproducibly built from
+				the
+				<a class="room-link" href="https://github.com/padolsey/onesown">source on GitHub</a> at
+				commit <code>{version.slice(0, 7)}</code>. Made by
+				<a class="room-link" href="https://j11y.io">James Padolsey</a>.
+			</p>
+		</footer>
 	</div>
 </div>
 
@@ -161,18 +160,13 @@
 	.room-wordmark {
 		font-family: Georgia, 'Times New Roman', serif;
 		font-style: italic;
-		font-size: 1.9rem;
+		font-size: 1.25rem;
 		font-weight: 700;
 		letter-spacing: -0.01em;
 	}
 	.room-tagline {
 		color: var(--muted);
-		font-size: 0.95rem;
-	}
-	.room-intro {
-		color: var(--muted);
-		font-size: 0.875rem;
-		line-height: 1.6;
+		font-size: 0.85rem;
 	}
 	.room-tab {
 		flex-shrink: 0;
@@ -243,5 +237,18 @@
 	}
 	.room-link:hover {
 		color: var(--fg);
+	}
+	/* Comfortable touch targets; the ⌘S hint is meaningless on touch. */
+	@media (pointer: coarse) {
+		.room-tab {
+			padding: 0.5rem 0.9rem;
+		}
+		.room-btn,
+		.room-clear {
+			padding: 0.5rem 0.8rem;
+		}
+		.room-btn kbd {
+			display: none;
+		}
 	}
 </style>

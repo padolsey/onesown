@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { tick } from 'svelte';
 	import Editor from '../Editor.svelte';
 	import { doc } from '../state.svelte';
 
@@ -78,8 +79,66 @@
 
 	function onWindowKeydown(e: KeyboardEvent) {
 		if (e.key === 'Escape') {
-			openMenu = null;
+			if (openMenu) {
+				menuButtons[openMenu]?.focus();
+				openMenu = null;
+			}
 			if (showAbout) closeAbout();
+		}
+	}
+
+	// Keyboard support the menu roles promise (APG menubar pattern, minimally):
+	// ArrowDown opens and enters a menu, Up/Down/Home/End move within it,
+	// Left/Right move across menus, Escape closes (window handler above).
+	const menuItems = (name: string) =>
+		Array.from(
+			document.querySelectorAll<HTMLButtonElement>(`[data-menu="${name}"] [role="menuitem"]`)
+		);
+
+	async function openAndFocusFirst(name: string) {
+		openMenu = name;
+		await tick();
+		menuItems(name)[0]?.focus();
+	}
+
+	function adjacentMenu(name: string, dir: 1 | -1) {
+		const idx = menus.findIndex((m) => m.name === name);
+		return menus[(idx + dir + menus.length) % menus.length].name;
+	}
+
+	function buttonKeydown(e: KeyboardEvent, name: string) {
+		if (e.key === 'ArrowDown') {
+			e.preventDefault();
+			void openAndFocusFirst(name);
+		} else if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+			e.preventDefault();
+			const next = adjacentMenu(name, e.key === 'ArrowRight' ? 1 : -1);
+			menuButtons[next]?.focus();
+			if (openMenu) openMenu = next;
+		}
+	}
+
+	function menuListKeydown(e: KeyboardEvent, name: string) {
+		const items = menuItems(name);
+		const current = items.indexOf(document.activeElement as HTMLButtonElement);
+		if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+			e.preventDefault();
+			const next =
+				e.key === 'ArrowDown'
+					? (current + 1) % items.length
+					: current <= 0
+						? items.length - 1
+						: current - 1;
+			items[next]?.focus();
+		} else if (e.key === 'Home') {
+			e.preventDefault();
+			items[0]?.focus();
+		} else if (e.key === 'End') {
+			e.preventDefault();
+			items[items.length - 1]?.focus();
+		} else if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+			e.preventDefault();
+			void openAndFocusFirst(adjacentMenu(name, e.key === 'ArrowRight' ? 1 : -1));
 		}
 	}
 </script>
@@ -111,6 +170,7 @@
 					aria-haspopup="menu"
 					aria-expanded={openMenu === menu.name}
 					onclick={(e) => toggleMenu(e, menu.name)}
+					onkeydown={(e) => buttonKeydown(e, menu.name)}
 					onmouseenter={() => {
 						if (openMenu) openMenu = menu.name;
 					}}
@@ -118,7 +178,13 @@
 					{menu.name}
 				</button>
 				{#if openMenu === menu.name}
-					<div class="bevel-out absolute left-0 top-full z-20 min-w-[160px] bg-[#c0c0c0] py-[2px]" role="menu">
+					<div
+						class="bevel-out absolute left-0 top-full z-20 min-w-[160px] bg-[#c0c0c0] py-[2px]"
+						role="menu"
+						tabindex="-1"
+						data-menu={menu.name}
+						onkeydown={(e) => menuListKeydown(e, menu.name)}
+					>
 						{#each menu.items as item (item.label)}
 							<button
 								type="button"
@@ -140,7 +206,7 @@
 	<div class="bevel-in scratch-body bg-white">
 		<div
 			class="px-2 py-1.5 text-[13.5px] leading-[1.45] text-black"
-			style="font-family: Consolas, 'Lucida Console', 'Courier New', monospace; --editor-caret: #000000; --editor-selection: #000080; --editor-selection-fg: #ffffff; --editor-min: 50vh;"
+			style="font-family: Consolas, 'Lucida Console', 'Courier New', monospace; --editor-caret: #000000; --editor-selection: #000080; --editor-selection-fg: #ffffff; --editor-min: 55vh;"
 		>
 			<Editor label="Draft — scratch file" nowrap={!wordWrap} />
 		</div>
@@ -224,5 +290,15 @@
 		color: #000000;
 		font-size: 9px;
 		line-height: 1;
+	}
+	/* The 1995 metrics are the joke, but fingers aren't retro. */
+	@media (pointer: coarse) {
+		nav button {
+			padding: 6px 10px;
+		}
+		[role='menuitem'] {
+			padding-top: 8px;
+			padding-bottom: 8px;
+		}
 	}
 </style>
