@@ -11,6 +11,19 @@ html {
 		background: #191817;
 	}
 }
+/* A theme override has to reach the root too, or it restyles the app box and
+   leaves the overscroll gutter, the scrollbars and every native control
+   (the prefs radios, the goal input, Yours' selects) on the OS scheme.
+   `color-scheme` is what native UI actually reads, so pinning it is the point,
+   not the background. Set by the effect in +layout.svelte. */
+html[data-theme='light'] {
+	background: #f2efe9;
+	color-scheme: light;
+}
+html[data-theme='dark'] {
+	background: #191817;
+	color-scheme: dark;
+}
 
 /* Respect user's motion preferences */
 @media (prefers-reduced-motion: reduce) {

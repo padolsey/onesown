@@ -168,6 +168,11 @@ node scripts/verify-deployment.mjs https://onesown.app</code
 		font-size: 0.95rem;
 		line-height: 1.65;
 	}
+	/* Dark by OS by default, but a theme the writer pinned back in the room wins:
+	   the footer's Verify link is how they got here, so the page has to arrive
+	   wearing what they chose. :global reaches the root attribute the layout
+	   sets. Both overrides outrank the media query on specificity (0,2,1 beats
+	   0,1,0), so neither depends on source order. */
 	@media (prefers-color-scheme: dark) {
 		.v-app {
 			--bg: #191817;
@@ -175,6 +180,18 @@ node scripts/verify-deployment.mjs https://onesown.app</code
 			--muted: #98917f;
 			--line: #383530;
 		}
+	}
+	:global(html[data-theme='light']) .v-app {
+		--bg: #f2efe9;
+		--fg: #2f2b25;
+		--muted: #6c6456;
+		--line: #d9d3c7;
+	}
+	:global(html[data-theme='dark']) .v-app {
+		--bg: #191817;
+		--fg: #e6e1d7;
+		--muted: #98917f;
+		--line: #383530;
 	}
 	.v-wordmark {
 		font-family: Georgia, 'Times New Roman', serif;

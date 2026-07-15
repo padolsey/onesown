@@ -32,20 +32,14 @@
 	// and so re-runs on every keystroke — tearing down into doc.flush() each
 	// time, which wrote the whole draft to localStorage per character and
 	// defeated the save debounce entirely.
+	// (prefs.load() and the theme override live in +layout.svelte — they belong
+	// to the writer, not to this page.)
 	$effect(() => {
 		untrack(() => {
 			doc.load();
-			prefs.load();
 			isMac = /Mac|iP(hone|ad|od)/.test(navigator.platform);
 		});
 		return () => doc.flush();
-	});
-
-	// Theme override reaches the document root so scrollbars, form controls and
-	// overscroll match (html[data-theme] rules live in app.css).
-	$effect(() => {
-		if (prefs.theme === 'system') delete document.documentElement.dataset.theme;
-		else document.documentElement.dataset.theme = prefs.theme;
 	});
 
 	const statusText = $derived(

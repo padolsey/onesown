@@ -320,7 +320,25 @@ await prefsBtn().click();
 await page.locator('label', { hasText: 'dark' }).locator('input').check();
 const darkBg = await page.evaluate(() => getComputedStyle(document.querySelector('.room-app')).backgroundColor);
 check('dark theme override applies', darkBg === 'rgb(25, 24, 23)', darkBg);
+// The override has to reach the root, not just the app box: color-scheme is what
+// the scrollbars, the overscroll gutter and every native control actually read.
+// Chromium runs light by default here, so this is the override fighting the OS.
+const root = await page.evaluate(() => ({
+	bg: getComputedStyle(document.documentElement).backgroundColor,
+	scheme: getComputedStyle(document.documentElement).colorScheme
+}));
+check('dark theme override reaches the document root', root.bg === 'rgb(25, 24, 23)' && root.scheme === 'dark', JSON.stringify(root));
+// /verify is reached from a themed page's footer, so it must arrive themed.
+await page.locator('a[href="/verify"]').click();
+await page.waitForTimeout(400);
+const vBg = await page.evaluate(() => getComputedStyle(document.querySelector('.v-app')).backgroundColor);
+check('theme override carries to /verify', vBg === 'rgb(25, 24, 23)', vBg);
+await page.goBack();
+await page.waitForTimeout(400);
+await prefsBtn().click();
 await page.locator('label', { hasText: 'system' }).locator('input').check();
+const sysScheme = await page.evaluate(() => getComputedStyle(document.documentElement).colorScheme);
+check('system theme releases the root back to the OS', sysScheme === 'light dark', sysScheme);
 await prefsBtn().click();
 
 await tab('Post').click();
