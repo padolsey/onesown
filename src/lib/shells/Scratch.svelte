@@ -47,6 +47,7 @@
 			name: 'File',
 			items: [
 				{ label: 'New', action: () => doc.requestClear() },
+				{ label: 'Open…', action: () => void doc.openFromDisk() },
 				{ label: 'Save…', action: () => void doc.saveToDisk() }
 			]
 		},

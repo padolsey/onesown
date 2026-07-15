@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { Component } from 'svelte';
+	import { untrack, type Component } from 'svelte';
 	import { version } from '$app/environment';
 	import { doc, type ShellId } from '$lib/state.svelte';
 	import { prefs } from '$lib/prefs.svelte';
@@ -28,10 +28,16 @@
 	let isMac = $state(false);
 	let showAbout = $state(false);
 
+	// Mount/unmount only. Without untrack this reads the draft (load() checks it)
+	// and so re-runs on every keystroke — tearing down into doc.flush() each
+	// time, which wrote the whole draft to localStorage per character and
+	// defeated the save debounce entirely.
 	$effect(() => {
-		doc.load();
-		prefs.load();
-		isMac = /Mac|iP(hone|ad|od)/.test(navigator.platform);
+		untrack(() => {
+			doc.load();
+			prefs.load();
+			isMac = /Mac|iP(hone|ad|od)/.test(navigator.platform);
+		});
 		return () => doc.flush();
 	});
 
@@ -53,6 +59,26 @@
 						: 'Autosaves as you type')
 	);
 
+	// Focus mode means the writing owns the screen, and the browser's own chrome
+	// is half of what's in the way. requestFullscreen needs a user gesture —
+	// every path to here has one. Where it's unsupported (iPhone) or refused,
+	// hiding our own chrome still stands on its own.
+	async function setFocus(on: boolean) {
+		prefs.focus = on;
+		try {
+			if (on) await document.documentElement.requestFullscreen?.();
+			else if (document.fullscreenElement) await document.exitFullscreen();
+		} catch {
+			// refused or unavailable — focus mode is still worth having
+		}
+	}
+
+	// Leaving fullscreen by any other route (F11, the browser's own Esc) must
+	// not strand the writer in a focus mode they believe they've left.
+	function onFullscreenChange() {
+		if (!document.fullscreenElement && prefs.focus) prefs.focus = false;
+	}
+
 	function onKeydown(e: KeyboardEvent) {
 		const mod = e.metaKey || e.ctrlKey;
 		if (mod && !e.shiftKey && !e.altKey && (e.key.toLowerCase() === 's' || e.code === 'KeyS')) {
@@ -61,15 +87,38 @@
 			void doc.saveToDisk();
 			return;
 		}
+		if (mod && !e.shiftKey && !e.altKey && (e.key.toLowerCase() === 'o' || e.code === 'KeyO')) {
+			e.preventDefault();
+			if (e.repeat) return;
+			void doc.openFromDisk();
+			return;
+		}
+		// We own undo: a textarea's native stack dies with the element on every
+		// room switch, but the draft crossing rooms is the whole point — so its
+		// history has to outlive the room that showed it.
+		if (mod && !e.altKey && (e.key.toLowerCase() === 'z' || e.code === 'KeyZ')) {
+			// Mail's To/Subject fields are ordinary inputs; leave them native.
+			if (e.target instanceof HTMLInputElement) return;
+			e.preventDefault();
+			if (e.shiftKey) doc.redo();
+			else doc.undo();
+			return;
+		}
+		if (mod && !e.shiftKey && !e.altKey && (e.key.toLowerCase() === 'y' || e.code === 'KeyY')) {
+			if (e.target instanceof HTMLInputElement) return;
+			e.preventDefault();
+			doc.redo();
+			return;
+		}
 		if (mod && !e.shiftKey && !e.altKey && e.key === '.') {
 			e.preventDefault();
-			prefs.focus = !prefs.focus;
+			void setFocus(!prefs.focus);
 			return;
 		}
 		// Escape leaves focus mode — unless something closer (a menu, a dialog)
 		// is what the writer is escaping from.
 		if (e.key === 'Escape' && prefs.focus) {
-			if (!document.querySelector('[role="dialog"], [role="menu"]')) prefs.focus = false;
+			if (!document.querySelector('[role="dialog"], [role="menu"]')) void setFocus(false);
 		}
 	}
 
@@ -95,7 +144,7 @@
 </svelte:head>
 
 <svelte:window onkeydown={onKeydown} onbeforeunload={() => doc.flush()} />
-<svelte:document onvisibilitychange={onVisibilityChange} />
+<svelte:document onvisibilitychange={onVisibilityChange} onfullscreenchange={onFullscreenChange} />
 
 <div
 	class="room-app flex min-h-dvh flex-col"
@@ -125,8 +174,15 @@
 			<div class="ml-auto flex items-center gap-x-2">
 				<span class="room-status hidden md:inline">{statusText}</span>
 				<span class="sr-only" aria-live="polite">
-					{doc.diskNote ?? (doc.saveState === 'error' ? 'Couldn’t autosave' : '')}
+					{doc.justCleared
+						? 'Draft cleared. Undo is available.'
+						: (doc.diskNote ?? (doc.saveState === 'error' ? 'Couldn’t autosave' : ''))}
 				</span>
+				<!-- Clear is the one destructive action, and touch has no ⌘Z — so the
+				     way back has to be visible, not just a shortcut. Expires on its own. -->
+				{#if doc.justCleared}
+					<button type="button" class="room-undo" onclick={() => doc.undo()}>Undo clear</button>
+				{/if}
 				{#if prefs.goal}
 					<span
 						class="room-status tabular-nums"
@@ -223,10 +279,18 @@
 					type="button"
 					class="room-btn"
 					aria-pressed={prefs.focus}
-					title="Focus mode ({isMac ? '⌘.' : 'Ctrl+.'} — Esc to leave)"
-					onclick={() => (prefs.focus = true)}
+					title="Focus mode — full screen ({isMac ? '⌘.' : 'Ctrl+.'} — Esc to leave)"
+					onclick={() => void setFocus(true)}
 				>
 					Focus
+				</button>
+				<button
+					type="button"
+					class="room-btn"
+					title="Open a file ({isMac ? '⌘O' : 'Ctrl+O'})"
+					onclick={() => void doc.openFromDisk()}
+				>
+					Open
 				</button>
 				<button
 					type="button"
@@ -281,7 +345,7 @@
 			class="focus-exit"
 			aria-label="Exit focus mode"
 			title="Exit focus mode (Esc)"
-			onclick={() => (prefs.focus = false)}
+			onclick={() => void setFocus(false)}
 		>
 			esc
 		</button>
@@ -294,6 +358,8 @@
 		--fg: #2f2b25;
 		--muted: #6c6456;
 		--line: #d9d3c7;
+		/* AA against --bg in both themes; the Undo offer must not be decorative. */
+		--undo: #9a5b1e;
 		background: var(--bg);
 		color: var(--fg);
 		font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
@@ -313,6 +379,7 @@
 			--fg: #e6e1d7;
 			--muted: #98917f;
 			--line: #383530;
+			--undo: #d8a25e;
 		}
 	}
 	.room-app.theme-dark {
@@ -320,6 +387,7 @@
 		--fg: #e6e1d7;
 		--muted: #98917f;
 		--line: #383530;
+		--undo: #d8a25e;
 	}
 	.room-wordmark {
 		font-family: Georgia, 'Times New Roman', serif;
@@ -393,6 +461,19 @@
 	}
 	.room-clear:hover {
 		color: #c0392b;
+	}
+	/* Transient way back from Clear. Reads as an offer, not chrome — it leaves
+	   again on its own once the moment of regret has passed. */
+	.room-undo {
+		display: inline-flex;
+		align-items: center;
+		border: 1px solid currentColor;
+		border-radius: 0.4rem;
+		padding: 0.25rem 0.55rem;
+		font-size: 0.7rem;
+		font-weight: 500;
+		color: var(--undo);
+		cursor: pointer;
 	}
 	.room-note {
 		color: var(--muted);

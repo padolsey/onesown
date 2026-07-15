@@ -30,8 +30,14 @@ interface SaveFilePickerOptions {
 declare global {
 	interface Window {
 		showSaveFilePicker?: (options?: SaveFilePickerOptions) => Promise<FileSystemFileHandle>;
+		showOpenFilePicker?: (options?: { multiple?: boolean }) => Promise<FileSystemFileHandle[]>;
 	}
 }
+
+/** Refuse outright — past this the editor is unusable, not merely slow. */
+const OPEN_MAX_BYTES = 500 * 1024;
+/** Warn — typing measurably drags beyond roughly this much text. */
+const OPEN_WARN_BYTES = 100 * 1024;
 
 let text = $state('');
 let shell = $state<ShellId>('bare');
@@ -48,7 +54,106 @@ let diskNote = $state<string | null>(null);
 let loaded = false;
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
 let diskNoteTimer: ReturnType<typeof setTimeout> | null = null;
+let clearedTimer: ReturnType<typeof setTimeout> | null = null;
 let fileHandle: FileSystemFileHandle | null = null;
+
+/**
+ * Undo history.
+ *
+ * The draft is the spine that outlives every room, so its history has to as
+ * well: a textarea's native undo stack dies with the element on each shell
+ * switch. We own the stack instead, and the key handler suppresses the
+ * browser's so the two can't disagree.
+ */
+interface Snapshot {
+	text: string;
+	mailTo: string;
+	mailSubject: string;
+	mailCc: string;
+	mailBcc: string;
+	selStart: number;
+	selEnd: number;
+}
+
+/** A pause longer than this starts a new undo entry; faster keystrokes merge. */
+const COALESCE_MS = 500;
+const MAX_HISTORY = 100;
+/** Snapshots hold whole copies of the draft — bound the total, not just the count. */
+const MAX_HISTORY_CHARS = 4_000_000;
+
+let past = $state<Snapshot[]>([]);
+let future = $state<Snapshot[]>([]);
+let lastEditAt = 0;
+let justCleared = $state(false);
+
+function snapshot(): Snapshot {
+	return { text, mailTo, mailSubject, mailCc, mailBcc, selStart, selEnd };
+}
+
+function applySnapshot(s: Snapshot) {
+	text = s.text;
+	mailTo = s.mailTo;
+	mailSubject = s.mailSubject;
+	mailCc = s.mailCc;
+	mailBcc = s.mailBcc;
+	selStart = s.selStart;
+	selEnd = s.selEnd;
+	wantsFocus = true;
+	lastEditAt = 0;
+	if (browser && loaded) persist();
+}
+
+function trimHistory() {
+	while (past.length > MAX_HISTORY) past.shift();
+	let total = 0;
+	for (const s of past) total += s.text.length;
+	while (past.length > 1 && total > MAX_HISTORY_CHARS) {
+		total -= past[0].text.length;
+		past.shift();
+	}
+}
+
+/**
+ * Record the pre-edit state so undo can return to it. Call before mutating.
+ * `discrete` forces its own entry for one-shot changes (Clear, opening a file)
+ * that should never merge into surrounding typing.
+ */
+function recordEdit(discrete = false) {
+	const now = Date.now();
+	const startsGroup = discrete || past.length === 0 || now - lastEditAt > COALESCE_MS;
+	lastEditAt = discrete ? 0 : now;
+	future = [];
+	if (!startsGroup) return;
+	past.push(snapshot());
+	trimHistory();
+}
+
+function undo() {
+	if (past.length === 0) return false;
+	future.push(snapshot());
+	applySnapshot(past.pop()!);
+	dismissCleared();
+	return true;
+}
+
+function redo() {
+	if (future.length === 0) return false;
+	past.push(snapshot());
+	applySnapshot(future.pop()!);
+	return true;
+}
+
+function noteCleared() {
+	justCleared = true;
+	if (clearedTimer) clearTimeout(clearedTimer);
+	clearedTimer = setTimeout(() => (justCleared = false), 12000);
+}
+
+function dismissCleared() {
+	justCleared = false;
+	if (clearedTimer) clearTimeout(clearedTimer);
+	clearedTimer = null;
+}
 
 function scheduleSave() {
 	if (!browser || !loaded) return;
@@ -114,6 +219,7 @@ function switchShell(next: ShellId) {
 }
 
 function clearDraft() {
+	recordEdit(true);
 	text = '';
 	mailTo = '';
 	mailSubject = '';
@@ -127,13 +233,35 @@ function clearDraft() {
 	wantsFocus = true;
 }
 
-/** Shared clear flow: skip the confirm only when nothing would be lost. */
-function requestClear() {
+/**
+ * Shared clear flow: skip the confirm only when nothing would be lost.
+ * Returns whether the draft was actually cleared. Undoable, but the confirm
+ * stays — the note offering it expires, and losing a draft is unforgiving.
+ */
+function requestClear(): boolean {
 	const empty =
 		text === '' && mailTo === '' && mailSubject === '' && mailCc === '' && mailBcc === '';
-	if (empty || window.confirm('Clear the draft? This wipes the locally saved copy too.')) {
+	if (empty) {
 		clearDraft();
+		return true;
 	}
+	if (!window.confirm('Clear the draft? This wipes the locally saved copy too — you can undo.')) {
+		return false;
+	}
+	clearDraft();
+	noteCleared();
+	return true;
+}
+
+/** Replace the whole draft (opening a file) as one discrete undo entry. */
+function replaceText(next: string) {
+	recordEdit(true);
+	text = next;
+	selStart = 0;
+	selEnd = 0;
+	fileHandle = null;
+	wantsFocus = true;
+	if (browser && loaded) persist();
 }
 
 function noteDisk(message: string) {
@@ -185,11 +313,79 @@ async function saveToDisk() {
 	}
 }
 
+/** Browsers without the File System Access API (Firefox, Safari) get an input. */
+function pickViaInput(): Promise<File | null> {
+	return new Promise((resolve) => {
+		const input = document.createElement('input');
+		input.type = 'file';
+		let settled = false;
+		const done = (f: File | null) => {
+			if (settled) return;
+			settled = true;
+			resolve(f);
+		};
+		input.onchange = () => done(input.files?.[0] ?? null);
+		// Fires when the picker is dismissed; without it a cancel would hang forever.
+		input.oncancel = () => done(null);
+		input.click();
+	});
+}
+
+/**
+ * Open any file and read it as text. Deliberately liberal about type — a
+ * draft is a draft whatever the extension — but size is the one hard line,
+ * because the editor lays the whole draft out on every keystroke.
+ */
+async function openFromDisk() {
+	if (!browser) return;
+	let file: File | null = null;
+	if (typeof window.showOpenFilePicker === 'function') {
+		try {
+			const [handle] = await window.showOpenFilePicker({ multiple: false });
+			file = await handle.getFile();
+		} catch (e) {
+			if (e instanceof DOMException && e.name === 'AbortError') return;
+			noteDisk('Couldn’t open that file');
+			return;
+		}
+	} else {
+		file = await pickViaInput();
+	}
+	if (!file) return;
+
+	const kb = Math.round(file.size / 1024);
+	if (file.size > OPEN_MAX_BYTES) {
+		noteDisk(`${kb} KB is too big — 500 KB max`);
+		return;
+	}
+
+	let raw: string;
+	try {
+		raw = await file.text();
+	} catch {
+		noteDisk('Couldn’t read that file');
+		return;
+	}
+
+	// Warn about anything surprising, but in one prompt rather than three.
+	const warnings: string[] = [];
+	// A NUL byte in the first few KB means this is almost certainly not text.
+	if (raw.slice(0, 4096).includes('\u0000')) warnings.push('It doesn’t look like text.');
+	if (file.size > OPEN_WARN_BYTES) warnings.push(`It’s ${kb} KB — typing may lag.`);
+	if (text !== '') warnings.push('This replaces your draft (undo brings it back).');
+	if (warnings.length > 0 && !window.confirm(`Open ${file.name}?\n\n${warnings.join('\n')}`)) return;
+
+	replaceText(raw);
+	noteDisk(`Opened ${file.name}`);
+}
+
 export const doc = {
 	get text() {
 		return text;
 	},
 	set text(v: string) {
+		if (v === text) return;
+		recordEdit();
 		text = v;
 		scheduleSave();
 	},
@@ -200,6 +396,8 @@ export const doc = {
 		return mailTo;
 	},
 	set mailTo(v: string) {
+		if (v === mailTo) return;
+		recordEdit();
 		mailTo = v;
 		scheduleSave();
 	},
@@ -207,6 +405,8 @@ export const doc = {
 		return mailSubject;
 	},
 	set mailSubject(v: string) {
+		if (v === mailSubject) return;
+		recordEdit();
 		mailSubject = v;
 		scheduleSave();
 	},
@@ -214,6 +414,8 @@ export const doc = {
 		return mailCc;
 	},
 	set mailCc(v: string) {
+		if (v === mailCc) return;
+		recordEdit();
 		mailCc = v;
 		scheduleSave();
 	},
@@ -221,6 +423,8 @@ export const doc = {
 		return mailBcc;
 	},
 	set mailBcc(v: string) {
+		if (v === mailBcc) return;
+		recordEdit();
 		mailBcc = v;
 		scheduleSave();
 	},
@@ -258,11 +462,25 @@ export const doc = {
 		if (s === 0) return 1;
 		return s - text.lastIndexOf('\n', s - 1);
 	},
+	get canUndo() {
+		return past.length > 0;
+	},
+	get canRedo() {
+		return future.length > 0;
+	},
+	get justCleared() {
+		return justCleared;
+	},
 	load,
 	flush,
 	setSelection,
 	switchShell,
 	clearDraft,
 	requestClear,
-	saveToDisk
+	replaceText,
+	saveToDisk,
+	openFromDisk,
+	undo,
+	redo,
+	dismissCleared
 };

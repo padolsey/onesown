@@ -52,7 +52,7 @@
 		class="mx-auto flex w-full flex-1 flex-col px-6 py-10 leading-[1.75] sm:px-8"
 		style="max-width: {width}; font-family: {font}; font-size: {size}; color: {ink}; --editor-caret: {ink}; --editor-selection: color-mix(in srgb, {ink} 22%, transparent); --editor-min: 16rem;"
 	>
-		<Editor spell={true} placeholder="Your room. Your rules." label="Draft — your room" />
+		<Editor spell={true} placeholder="Your room. Your rules." label="Draft — your room" markers={true} />
 	</div>
 </section>
 

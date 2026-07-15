@@ -325,6 +325,84 @@ check('yours room renders custom paper', await page.evaluate(() =>
 	getComputedStyle(document.querySelector('main section')).backgroundColor === 'rgb(15, 15, 17)'));
 await page.locator('label', { hasText: 'Paper' }).locator('select').selectOption('cream');
 
+// ── 14. Undo: the draft's history must outlive the room showing it ──────────
+await page.goto(BASE + '/', { waitUntil: 'networkidle' });
+await page.evaluate(() => localStorage.removeItem('onesown:v1'));
+await page.reload({ waitUntil: 'networkidle' });
+await textarea().click();
+await page.keyboard.type('first thought');
+await page.waitForTimeout(700); // let the coalescing window close
+await page.keyboard.type(' and a second');
+await page.waitForTimeout(700);
+await tab('Pad').click(); // a textarea's native undo stack dies here
+await page.waitForTimeout(250);
+await page.keyboard.press('Control+z');
+await page.waitForTimeout(250);
+check('undo survives a room switch', (await textarea().inputValue()) === 'first thought');
+await page.keyboard.press('Control+Shift+z');
+await page.waitForTimeout(250);
+check('redo survives a room switch', (await textarea().inputValue()) === 'first thought and a second');
+
+// Clear is the one destructive act; touch has no ⌘Z, so the way back is visible.
+page.once('dialog', (d) => d.accept());
+await page.getByRole('button', { name: 'Clear', exact: true }).click();
+await page.waitForTimeout(300);
+check('clear offers a visible undo', (await page.locator('button.room-undo').count()) === 1);
+await page.locator('button.room-undo').click();
+await page.waitForTimeout(300);
+check('undo clear restores the draft', (await textarea().inputValue()) === 'first thought and a second');
+
+// ── 15. Marker shortcuts: on where the room is a writing surface ────────────
+await textarea().click();
+await page.keyboard.press('Control+a');
+await page.keyboard.press('Delete');
+await page.keyboard.type('make me bold');
+await page.keyboard.down('Shift');
+for (let i = 0; i < 4; i++) await page.keyboard.press('ArrowLeft');
+await page.keyboard.up('Shift');
+await page.keyboard.press('Control+b');
+await page.waitForTimeout(250);
+check('ctrl+B types markers in Pad', (await textarea().inputValue()) === 'make me **bold**');
+await page.keyboard.press('Control+i');
+await page.waitForTimeout(250);
+check('ctrl+I nests rather than dismantling bold', (await textarea().inputValue()) === 'make me ***bold***');
+// Each mark peels off independently, leaving the other intact.
+await page.keyboard.press('Control+i');
+await page.waitForTimeout(250);
+check('ctrl+I peels italic off, bold survives', (await textarea().inputValue()) === 'make me **bold**');
+await page.keyboard.press('Control+b');
+await page.waitForTimeout(250);
+check('markers toggle back off', (await textarea().inputValue()) === 'make me bold');
+
+// Term is a terminal: typing your own asterisks is the idiom, so no shortcut.
+await tab('Term').click();
+await page.waitForTimeout(250);
+await textarea().click();
+await page.keyboard.press('Control+a');
+await page.keyboard.press('Delete');
+await page.keyboard.type('plain');
+await page.keyboard.down('Shift');
+for (let i = 0; i < 5; i++) await page.keyboard.press('ArrowLeft');
+await page.keyboard.up('Shift');
+await page.keyboard.press('Control+b');
+await page.waitForTimeout(250);
+check('term leaves ctrl+B alone', (await textarea().inputValue()) === 'plain');
+
+// ── 16. Focus mode takes the whole screen, and leaves it cleanly ────────────
+await page.goto(BASE + '/', { waitUntil: 'networkidle' });
+await page.keyboard.press('Control+.');
+await page.waitForTimeout(400);
+check('focus enters fullscreen', await page.evaluate(() => !!document.fullscreenElement));
+await page.keyboard.press('Escape');
+await page.waitForTimeout(400);
+check('escape leaves fullscreen', await page.evaluate(() => !document.fullscreenElement));
+// Leaving fullscreen by any other route must not strand the writer in focus mode.
+await page.keyboard.press('Control+.');
+await page.waitForTimeout(400);
+await page.evaluate(() => document.exitFullscreen());
+await page.waitForTimeout(400);
+check('external fullscreen exit restores chrome', (await page.locator('header.room-top').count()) === 1);
+
 // Must be last: every request made during the entire run stays same-origin.
 check('no cross-origin requests', crossOrigin.length === 0, crossOrigin.slice(0, 3).join(' '));
 
