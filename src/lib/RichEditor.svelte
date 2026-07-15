@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { doc } from './state.svelte';
+	import { prefs } from './prefs.svelte';
 	import { markersToHtml, domToMarkers } from './markers';
 
 	let { spell = true, label = 'Draft' }: { spell?: boolean; label?: string } = $props();
@@ -27,6 +28,18 @@
 		active.bold = document.queryCommandState('bold');
 		active.italic = document.queryCommandState('italic');
 		active.underline = document.queryCommandState('underline');
+		maybeCenter();
+	}
+
+	// Typewriter scrolling: keep the caret's line near the vertical center.
+	function maybeCenter() {
+		if (!prefs.typewriter || !el) return;
+		const sel = document.getSelection();
+		if (!sel || sel.rangeCount === 0 || !sel.anchorNode || !el.contains(sel.anchorNode)) return;
+		let rect = sel.getRangeAt(0).cloneRange().getBoundingClientRect();
+		if (rect.top === 0 && rect.height === 0) rect = el.getBoundingClientRect();
+		const delta = rect.top - window.innerHeight * 0.45;
+		if (Math.abs(delta) > 24) window.scrollBy({ top: delta, behavior: 'auto' });
 	}
 
 	export function exec(cmd: 'bold' | 'italic' | 'underline') {

@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { doc } from './state.svelte';
+	import { prefs } from './prefs.svelte';
+	import { caretViewportTop } from './caret';
 
 	let {
 		placeholder = '',
@@ -23,6 +25,17 @@
 
 	function trackSelection() {
 		if (el) doc.setSelection(el.selectionStart ?? 0, el.selectionEnd ?? 0);
+		maybeCenter();
+	}
+
+	// Typewriter scrolling: keep the caret's line near the vertical center.
+	function maybeCenter() {
+		if (!prefs.typewriter || !el || document.activeElement !== el) return;
+		requestAnimationFrame(() => {
+			if (!el || document.activeElement !== el) return;
+			const delta = caretViewportTop(el) - window.innerHeight * 0.45;
+			if (Math.abs(delta) > 24) window.scrollBy({ top: delta, behavior: 'auto' });
+		});
 	}
 </script>
 

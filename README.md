@@ -1,17 +1,25 @@
 # A Room of One's Own
 
-**https://onesown.app** — one draft, seven rooms. A notepad that swaps the app
+**https://onesown.app** — one draft, eight rooms. A notepad that swaps the app
 around your words.
 
 What you write is shaped by what you write *into*. This is a single plain-text
-draft you can move between seven "rooms" — a quiet page, a scratch file, a
-legal pad, a terminal buffer, an unsent email, an office document, and a
-280-character box — and notice what each one does to your voice. Every room
-keeps its own lighting.
+draft you can move between "rooms" — a quiet page, a scratch file, a legal
+pad, a terminal buffer, an unsent email, an office document, a tiny post box,
+and **Yours**, the one room whose lighting you set yourself — and notice what
+each one does to your voice. Every other room keeps its own lighting
+(flavor variants aside: yellow/white pad paper, green/amber phosphor,
+280/500-character limit).
 
 Nothing you write leaves the page. The draft autosaves to the browser's local
 storage; **Save to disk** (⌘S / Ctrl+S) writes a plain `.txt` file via the File
-System Access API, or downloads one where that isn't available.
+System Access API, or downloads one where that isn't available. The app works
+offline after one visit (same-origin service worker) and installs as a PWA.
+
+For writers: **Focus mode** (⌘. / Ctrl+. — Esc to leave) hides all chrome,
+**typewriter scrolling** keeps the caret line vertically centered, a **word
+goal** shows progress in each room's own idiom, and the theme can be pinned
+light/dark independent of the OS.
 
 ## How it works
 

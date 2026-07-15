@@ -14,5 +14,6 @@ export const shellList: ShellMeta[] = [
 	{ id: 'term', name: 'Term', hint: 'A terminal buffer — no decoration, no lies' },
 	{ id: 'mail', name: 'Mail', hint: 'An unsent email — say it straight' },
 	{ id: 'doc', name: 'Doc', hint: 'An office document — writing for the record' },
-	{ id: 'post', name: 'Post', hint: 'A 280-character box — compression is clarity' }
+	{ id: 'post', name: 'Post', hint: 'A tiny box — compression is clarity' },
+	{ id: 'yours', name: 'Yours', hint: 'Your room — you set the lighting' }
 ];

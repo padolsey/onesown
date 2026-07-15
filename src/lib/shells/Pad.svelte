@@ -1,13 +1,24 @@
 <script lang="ts">
 	import Editor from '../Editor.svelte';
+	import { prefs } from '../prefs.svelte';
+
+	// Paper variant (Preferences → This room): classic yellow or white pad.
+	const paper = $derived(
+		prefs.padPaper === 'white'
+			? { bg: '#fcfcf7', strip: '#e9e9e0', stripLine: '#d6d6c8' }
+			: { bg: '#fdf6a8', strip: '#e7d67f', stripLine: '#d9c76a' }
+	);
 </script>
 
-<section class="mx-auto max-w-2xl overflow-hidden rounded-md bg-[#fdf6a8] shadow-lg shadow-stone-900/20">
-	<div class="h-3 border-b border-[#d9c76a] bg-[#e7d67f]"></div>
+<section
+	class="mx-auto max-w-2xl overflow-hidden rounded-md shadow-lg shadow-stone-900/20"
+	style="background: {paper.bg};"
+>
+	<div class="h-3 border-b" style="background: {paper.strip}; border-color: {paper.stripLine};"></div>
 	<div class="pad-paper">
 		<div
 			class="pad-ink text-[17px] leading-[28px] text-[#2b4a9e]"
-			style="font-family: 'Bradley Hand', 'Segoe Print', 'Comic Sans MS', 'Comic Neue', cursive; --editor-caret: #2b4a9e; --editor-selection: rgba(43, 74, 158, 0.18); --editor-min: 60vh;"
+			style="font-family: 'Bradley Hand', 'Segoe Print', 'Comic Sans MS', 'Comic Neue', cursive; --editor-caret: #2b4a9e; --editor-selection: rgba(43, 74, 158, 0.18); --editor-min: max(16rem, calc(100dvh - var(--chrome, 7rem) - 11rem));"
 		>
 			<Editor label="Draft — legal pad" />
 		</div>

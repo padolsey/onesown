@@ -18,6 +18,9 @@ const config = {
 		// assets-only Cloudflare Worker with no server code at all.
 		adapter: adapter(),
 		version: { name: commit },
+		// Registered manually in +layout.svelte (production only), so dev and
+		// e2e runs never sit behind a service-worker cache.
+		serviceWorker: { register: false },
 		// Browser-enforced no-exfiltration policy. Prerendered pages carry this
 		// as a <meta> tag with hashes for Kit's inline bootstrap script;
 		// frame-ancestors can't live in a meta CSP, so it's set in
@@ -32,6 +35,7 @@ const config = {
 				'style-src': ['self', 'unsafe-inline'],
 				'img-src': ['self', 'data:'],
 				'connect-src': ['self'],
+				'worker-src': ['self'],
 				'base-uri': ['none'],
 				'form-action': ['none'],
 				'object-src': ['none'],

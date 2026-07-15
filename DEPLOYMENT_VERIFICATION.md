@@ -87,6 +87,26 @@ Your draft is stored in `localStorage` in your browser and is never
 transmitted. "Send"/"Post" buttons copy to your clipboard; "Save to disk"
 writes a local file.
 
+## Offline behavior (service worker)
+
+The app registers a same-origin service worker (`src/service-worker.js`) so it
+works offline after one visit. Two consequences for verification:
+
+- The worker is part of the build: it is served at `/service-worker.js`,
+  covered by the byte-for-byte check like every other file, and its cache is
+  keyed by the deployed commit SHA (a new deploy drops old caches on
+  activation).
+- **A browser that has the app cached may keep running a previously-verified
+  version briefly** — the service worker checks for updates on navigation and
+  swaps to the new deployment on the next load. The verification procedure
+  above always talks to the network directly, so it always verifies what the
+  server is serving *now*; what your own browser is running is shown at
+  [/verify](https://onesown.app/verify), which cross-checks its build-time
+  commit against the live attestation and flags any mismatch.
+
+The worker never touches cross-origin requests (there are none, and the CSP
+forbids them regardless).
+
 ## The trust model, honestly
 
 Verification is **per-version**: it proves that the deployment you checked, at

@@ -1,8 +1,10 @@
 <script lang="ts">
 	import Editor from '../Editor.svelte';
 	import { doc } from '../state.svelte';
+	import { prefs } from '../prefs.svelte';
 
-	const LIMIT = 280;
+	// Limit variant (Preferences → This room): 280 or 500 characters.
+	const LIMIT = $derived(prefs.postLimit);
 
 	let copied = $state(false);
 	const remaining = $derived(LIMIT - doc.chars);
@@ -61,7 +63,7 @@
 			{remaining}
 		</span>
 		<span class="sr-only" aria-live="polite">
-			{remaining < 0 ? `${-remaining} characters over the 280 limit` : ''}
+			{remaining < 0 ? `${-remaining} characters over the ${LIMIT} limit` : ''}
 		</span>
 		<button
 			type="button"

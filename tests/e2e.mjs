@@ -244,7 +244,7 @@ check('file > save triggers save', !!(await dl2));
 // ── 11. Screenshots ──────────────────────────────────────────────────────────
 await tab('Term').click();
 await textarea().fill('The room is **not** neutral.\n\nEvery surface asks for a *different* voice.');
-for (const shell of ['Bare', 'Scratch', 'Pad', 'Term', 'Mail', 'Doc', 'Post']) {
+for (const shell of ['Bare', 'Scratch', 'Pad', 'Term', 'Mail', 'Doc', 'Post', 'Yours']) {
 	await tab(shell).click();
 	await page.waitForTimeout(250);
 	await page.screenshot({ path: path.join(SHOTS, `${shell.toLowerCase()}.png`) });
@@ -275,7 +275,55 @@ if (isDeployed) {
 	check('security headers served', h['x-content-type-options'] === 'nosniff' &&
 		(h['content-security-policy'] || '').includes("frame-ancestors 'none'"), JSON.stringify(h['content-security-policy'] ?? null));
 	check('csp meta present', (await page.locator('meta[http-equiv="content-security-policy" i]').count()) >= 1);
+	check('manifest served', (await page.request.get(BASE + '/manifest.webmanifest')).ok());
+	const swRegistered = await page.evaluate(async () => {
+		for (let i = 0; i < 20; i++) {
+			if (await navigator.serviceWorker?.getRegistration()) return true;
+			await new Promise((r) => setTimeout(r, 250));
+		}
+		return false;
+	});
+	check('service worker registers', swRegistered);
 }
+
+// ── 13. Preferences: focus mode, theme, variants, Yours room ────────────────
+await page.goto(BASE + '/', { waitUntil: 'networkidle' });
+check('yours tab present', (await tab('Yours').count()) === 1);
+
+await page.getByRole('button', { name: 'Focus', exact: true }).click();
+check('focus hides chrome', (await page.locator('header.room-top').count()) === 0 &&
+	(await page.locator('footer.room-foot').count()) === 0);
+await page.keyboard.press('Escape');
+await page.waitForTimeout(100);
+check('escape exits focus', (await page.locator('header.room-top').count()) === 1);
+
+const prefsBtn = () => page.locator('summary[aria-label="Preferences"]');
+await prefsBtn().click();
+await page.locator('label', { hasText: 'dark' }).locator('input').check();
+const darkBg = await page.evaluate(() => getComputedStyle(document.querySelector('.room-app')).backgroundColor);
+check('dark theme override applies', darkBg === 'rgb(25, 24, 23)', darkBg);
+await page.locator('label', { hasText: 'system' }).locator('input').check();
+await prefsBtn().click();
+
+await tab('Post').click();
+await prefsBtn().click();
+await page.locator('label', { hasText: '500' }).locator('input').check();
+await textarea().fill('limit check');
+check('post limit variant', (await page.locator('section span.tabular-nums').textContent()).trim() === String(500 - 'limit check'.length));
+await page.locator('label', { hasText: '280' }).locator('input').check();
+await prefsBtn().click();
+
+await tab('Yours').click();
+await page.locator('label', { hasText: 'Paper' }).locator('select').selectOption('night');
+await page.waitForTimeout(700);
+await page.reload({ waitUntil: 'networkidle' });
+check('yours room persists customization', await page.evaluate(() => {
+	const p = JSON.parse(localStorage.getItem('onesown:prefs:v1') || '{}');
+	return p.yours?.paper === 'night';
+}));
+check('yours room renders custom paper', await page.evaluate(() =>
+	getComputedStyle(document.querySelector('main section')).backgroundColor === 'rgb(15, 15, 17)'));
+await page.locator('label', { hasText: 'Paper' }).locator('select').selectOption('cream');
 
 // Must be last: every request made during the entire run stays same-origin.
 check('no cross-origin requests', crossOrigin.length === 0, crossOrigin.slice(0, 3).join(' '));

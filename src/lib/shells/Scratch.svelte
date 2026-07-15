@@ -2,6 +2,7 @@
 	import { tick } from 'svelte';
 	import Editor from '../Editor.svelte';
 	import { doc } from '../state.svelte';
+	import { prefs } from '../prefs.svelte';
 
 	let openMenu = $state<string | null>(null);
 	let wordWrap = $state(true);
@@ -206,7 +207,7 @@
 	<div class="bevel-in scratch-body bg-white">
 		<div
 			class="px-2 py-1.5 text-[13.5px] leading-[1.45] text-black"
-			style="font-family: Consolas, 'Lucida Console', 'Courier New', monospace; --editor-caret: #000000; --editor-selection: #000080; --editor-selection-fg: #ffffff; --editor-min: 55vh;"
+			style="font-family: Consolas, 'Lucida Console', 'Courier New', monospace; --editor-caret: #000000; --editor-selection: #000080; --editor-selection-fg: #ffffff; --editor-min: max(16rem, calc(100dvh - var(--chrome, 7rem) - 9rem));"
 		>
 			<Editor label="Draft — scratch file" nowrap={!wordWrap} />
 		</div>
@@ -214,6 +215,9 @@
 	{#if statusBar}
 		<footer class="sticky bottom-0 flex gap-[3px] bg-[#c0c0c0] px-[2px] py-[2px] text-[11.5px] text-black">
 			<span class="bevel-in flex-1 px-2 py-0.5">Ln {doc.line}, Col {doc.col}</span>
+			{#if prefs.goal}
+				<span class="bevel-in px-2 py-0.5">{doc.words}/{prefs.goal}w</span>
+			{/if}
 			<span class="bevel-in px-2 py-0.5">{doc.chars} chars</span>
 			<span class="bevel-in px-2 py-0.5">UTF-8</span>
 		</footer>

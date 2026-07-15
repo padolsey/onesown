@@ -1,6 +1,7 @@
 <script lang="ts">
 	import RichEditor from '../RichEditor.svelte';
 	import { doc } from '../state.svelte';
+	import { prefs } from '../prefs.svelte';
 
 	let editor = $state<RichEditor | null>(null);
 
@@ -43,7 +44,7 @@
 		>
 			<div
 				class="text-[14.5px] leading-[1.45] text-[#1f1f1f]"
-				style="--editor-caret: #185abd; --editor-selection: rgba(58, 118, 216, 0.25); --editor-min: 60vh;"
+				style="--editor-caret: #185abd; --editor-selection: rgba(58, 118, 216, 0.25); --editor-min: max(14rem, calc(100dvh - var(--chrome, 7rem) - 21rem));"
 			>
 				<RichEditor bind:this={editor} spell={true} label="Draft — office document" />
 			</div>
@@ -52,7 +53,7 @@
 	<footer
 		class="sticky bottom-0 flex select-none justify-between border-t border-[#d5d2ce] bg-[#f7f5f2] px-4 py-1 text-[12px] text-stone-500"
 	>
-		<span>Page 1 of 1 · {doc.words} words</span>
+		<span>Page 1 of 1 · {doc.words}{prefs.goal ? ` of ${prefs.goal}` : ''} words</span>
 		<span>English (UK) · 100%</span>
 	</footer>
 </section>

@@ -6,10 +6,19 @@
 import { browser } from '$app/environment';
 import { stripMarkers } from './markers';
 
-export type ShellId = 'bare' | 'scratch' | 'pad' | 'term' | 'mail' | 'doc' | 'post';
+export type ShellId = 'bare' | 'scratch' | 'pad' | 'term' | 'mail' | 'doc' | 'post' | 'yours';
 
 const STORAGE_KEY = 'onesown:v1';
-const SHELL_IDS: readonly ShellId[] = ['bare', 'scratch', 'pad', 'term', 'mail', 'doc', 'post'];
+const SHELL_IDS: readonly ShellId[] = [
+	'bare',
+	'scratch',
+	'pad',
+	'term',
+	'mail',
+	'doc',
+	'post',
+	'yours'
+];
 
 type SaveState = 'idle' | 'pending' | 'saved' | 'error';
 
