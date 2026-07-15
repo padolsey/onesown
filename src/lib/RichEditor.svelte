@@ -31,14 +31,20 @@
 		maybeCenter();
 	}
 
-	// Typewriter scrolling: keep the caret's line near the vertical center.
+	// Typewriter scrolling: keep the caret's line near the vertical center of what
+	// the writer can actually see. See Editor.svelte's maybeCenter — innerHeight is
+	// the layout viewport, which iOS Safari doesn't shrink for the soft keyboard,
+	// so centring against it aims the caret into the keyboard.
 	function maybeCenter() {
 		if (!prefs.typewriter || !el) return;
 		const sel = document.getSelection();
 		if (!sel || sel.rangeCount === 0 || !sel.anchorNode || !el.contains(sel.anchorNode)) return;
 		let rect = sel.getRangeAt(0).cloneRange().getBoundingClientRect();
 		if (rect.top === 0 && rect.height === 0) rect = el.getBoundingClientRect();
-		const delta = rect.top - window.innerHeight * 0.45;
+		const view = window.visualViewport;
+		const height = view?.height ?? window.innerHeight;
+		const top = view?.offsetTop ?? 0;
+		const delta = rect.top - top - height * 0.45;
 		if (Math.abs(delta) > 24) window.scrollBy({ top: delta, behavior: 'auto' });
 	}
 
