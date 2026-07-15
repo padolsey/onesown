@@ -575,6 +575,142 @@ check('keeping this copy resumes saving', (await storedText()) === 'my unsaved l
 check('resolving dismisses the notice', (await page.locator('.room-notice').count()) === 0);
 await otherTab.close();
 
+// ── 18. Semantic round trip: does the draft still MEAN what was written? ─────
+//
+// The idempotence sweep above only asks whether the string stops changing. That
+// is not the same question. `a*b<i>y</i>` serializes to `a*b*y*`, renders back
+// as `a<i>b</i>y*` and re-serializes to `a*b*y*` — perfectly stable, and the
+// italic has moved off "y" onto "b" while the plaintext changed. The sweep says
+// OK. Measured, that blind spot covers ~2.4x more broken cases than the sweep
+// detects at all, which is how the backslash bug shipped.
+//
+// So compare MEANING: the plaintext, plus the text each mark covers. Covered
+// text rather than indices, so consumed delimiters (which shift every later
+// index) don't produce false alarms, while a mark that moved or died still does.
+//
+// This drives the real Doc room, because the half the unit tests cannot reach is
+// domToMarkers, and that needs a real contenteditable.
+const semantics = () =>
+	rich().evaluate((root) => {
+		const acc = { text: '', b: '', i: '', u: '' };
+		const MARK = { B: 'b', STRONG: 'b', I: 'i', EM: 'i', U: 'u' };
+		const walk = (n, open) => {
+			for (const c of n.childNodes) {
+				if (c.nodeType === 3) {
+					const v = c.nodeValue ?? '';
+					acc.text += v;
+					for (const m of open) acc[m] += v;
+				} else if (c.nodeName === 'BR') {
+					acc.text += '\n';
+				} else if (c.nodeType === 1) {
+					const m = MARK[c.nodeName];
+					walk(c, m ? [...open, m] : open);
+				}
+			}
+		};
+		walk(root, []);
+		acc.text = acc.text.replace(/\n$/, ''); // trailing caret placeholder is not content
+		return acc;
+	});
+const sameSem = (a, b) => a.text === b.text && a.b === b.b && a.i === b.i && a.u === b.u;
+
+// The cases must start from what the WRITER BUILT, not from a canonical string:
+// rendering a draft that is already mis-parsed and checking it stays mis-parsed
+// measures stability again, and reports green. So drive the room — type the text,
+// press B where the writer would — capture the intent, then force a canonical
+// round trip and ask whether the intent survived.
+// Type the whole line, then select a word and bold it — what a writer does, and
+// deterministic. (Toggling B at a collapsed caret and typing into it does not
+// survive serialize() re-entering the editor, which is its own question.)
+const boldBtn = () => page.locator('button[title="Bold (Ctrl+B)"]');
+async function writeInDoc(text, boldWord) {
+	await tab('Doc').click();
+	await rich().click();
+	await page.keyboard.press('Control+a');
+	await page.keyboard.press('Delete');
+	// The bold typing-state survives clearing, so without this the previous case
+	// leaks in: the whole line types bold, and bolding the target word toggles it
+	// OFF. Both sides of the comparison then agree, and the case reports faithful
+	// while measuring the exact inverse of its name.
+	await page.waitForTimeout(100);
+	if ((await boldBtn().getAttribute('aria-pressed')) === 'true') {
+		await boldBtn().click();
+		await page.waitForTimeout(100);
+	}
+	await page.keyboard.type(text);
+	await page.waitForTimeout(150);
+	await rich().evaluate((root, sub) => {
+		const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+		let node;
+		while ((node = walker.nextNode())) {
+			const at = (node.nodeValue ?? '').indexOf(sub);
+			if (at === -1) continue;
+			const r = document.createRange();
+			r.setStart(node, at);
+			r.setEnd(node, at + sub.length);
+			const sel = getSelection();
+			sel.removeAllRanges();
+			sel.addRange(r);
+			return;
+		}
+		throw new Error('could not select ' + JSON.stringify(sub));
+	}, boldWord);
+	await boldBtn().click();
+	await page.waitForTimeout(250);
+}
+
+// `faithful: false` records a KNOWN LIMITATION, measured and understood: a stray
+// * (or trailing \) where a mark begins right after a NON-WHITESPACE character
+// lets the parser re-pair asterisk runs across the marker boundary and destroy
+// the mark. A space before the mark makes it unable to close, which is why
+// ordinary prose is safe. It is a parser defect — CommonMark's "rule of 3"
+// forbids exactly this mis-parse — but correcting it is not isolated (it repairs
+// 511 of 1236 sweep cases while introducing 5, and needs serializer changes to
+// reach zero). See tests/markers.test.ts and .claude/markers-investigation/.
+//
+// They are asserted so the blast radius cannot widen quietly. If one starts
+// passing, someone fixed the codec: flip it to faithful:true, don't delete it.
+const SEMANTIC_CASES = [
+	{ name: 'bold after a space', text: '2*3 and bold', bold: 'bold', faithful: true },
+	{ name: 'bold in plain prose', text: 'a normal sentence with bold in it', bold: 'bold', faithful: true },
+	{ name: 'a backslash inside a bold run', text: 'path C:\\', bold: 'C:\\', faithful: true },
+	{ name: 'bold, then a backslash after it', text: 'backup C:\\', bold: 'backup', faithful: true },
+	{ name: 'KNOWN stray asterisk, bold after "("', text: '2*3 (six)', bold: 'six', faithful: false },
+	{ name: 'KNOWN stray asterisk, bold after a quote', text: 'a*b "quoted"', bold: 'quoted', faithful: false },
+	{ name: 'KNOWN backslash abutting a bold run', text: 'C:\\backup', bold: 'backup', faithful: false }
+];
+for (const c of SEMANTIC_CASES) {
+	await writeInDoc(c.text, c.bold);
+	const intent = await semantics(); // what the writer actually built
+	// Verify the fixture before trusting the result. A round trip between two
+	// identically-wrong states looks faithful, so a case that failed to set up is
+	// worse than useless — it reports green. This assertion is the difference
+	// between measuring the codec and measuring nothing.
+	check(
+		`fixture built as intended: ${c.name}`,
+		intent.text === c.text && intent.b === c.bold,
+		`wanted text ${JSON.stringify(c.text)} bold ${JSON.stringify(c.bold)}, built ${JSON.stringify(intent)}`
+	);
+	await tab('Term').click(); // force the draft through the canonical string
+	await page.waitForTimeout(150);
+	await tab('Doc').click();
+	await page.waitForTimeout(250);
+	const survived = await semantics(); // ...and what came back
+	const held = sameSem(intent, survived);
+	const trace = `wrote ${JSON.stringify(intent)} · got back ${JSON.stringify(survived)}`;
+	check(
+		`meaning survives a room switch: ${c.name}`,
+		held === c.faithful,
+		held === c.faithful
+			? c.faithful
+				? ''
+				: `known limitation, unchanged — ${trace}`
+			: c.faithful
+				? `REGRESSED — ${trace}`
+				: `now FAITHFUL: the codec was fixed, flip this case to faithful:true — ${trace}`
+	);
+}
+
 // Both terminal guards, together and last, so an appended section can't fall
 // outside them the way this one silently did.
 check('no page JS errors', pageErrors.length === 0, pageErrors.slice(0, 3).join(' | '));
