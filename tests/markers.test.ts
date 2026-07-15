@@ -8,7 +8,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { markersToHtml, stripMarkers } from '../src/lib/markers.ts';
-import { semanticsOfHtml, describe as describeSem, type Semantics } from './semantics.ts';
+import { semanticsOfHtml, marksOver, describe as describeSem } from './semantics.ts';
 
 test('plain text passes through with HTML escaped', () => {
 	assert.equal(markersToHtml('a & b <script> c'), 'a &amp; b &lt;script&gt; c');
@@ -73,42 +73,67 @@ test('stripMarkers cleans filenames', () => {
 // relocated a mark. These assert meaning: the plaintext, and the text each mark
 // covers. See tests/semantics.ts.
 
-/** Assert the meaning of a canonical draft as the rich rooms would render it. */
-function meaning(draft: string, expected: Partial<Semantics>) {
+/**
+ * Assert the meaning of a canonical draft as the rich rooms would render it.
+ * Marks are given as half-open ranges over the expected plaintext, so a mark
+ * that moves to different text of the same content still fails.
+ */
+function meaning(draft: string, expected: { text: string; b?: [number, number][]; i?: [number, number][]; u?: [number, number][] }) {
 	const got = semanticsOfHtml(markersToHtml(draft));
-	const want: Semantics = { text: '', b: '', i: '', u: '', ...expected };
+	const want = { text: expected.text, marks: marksOver(expected.text, expected) };
 	assert.deepEqual(got, want, `${JSON.stringify(draft)} -> ${describeSem(got)}`);
 }
 
+test('the oracle distinguishes a mark that moved', () => {
+	// The point of positions. Covered-text-per-mark says "bold covers go" for
+	// both of these and calls them equal, which would blind the whole suite to
+	// the failure mode it exists to catch.
+	const first = semanticsOfHtml('<b>go</b> go');
+	const second = semanticsOfHtml('go <b>go</b>');
+	assert.equal(first.text, second.text);
+	assert.notDeepEqual(first, second, 'a moved mark must not compare equal');
+	assert.equal(first.marks, 'bb---');
+	assert.equal(second.marks, '---bb');
+});
+
 test('a bold run means bold over exactly its own text', () => {
-	meaning('**bold**', { text: 'bold', b: 'bold' });
-	meaning('a **bold** b', { text: 'a bold b', b: 'bold' });
-	meaning('**a** and **b**', { text: 'a and b', b: 'ab' });
-	meaning('***x***', { text: 'x', b: 'x', i: 'x' });
-	meaning('<u>u</u>', { text: 'u', u: 'u' });
+	meaning('**bold**', { text: 'bold', b: [[0, 4]] });
+	meaning('a **bold** b', { text: 'a bold b', b: [[2, 6]] });
+	meaning('**a** and **b**', { text: 'a and b', b: [[0, 1], [6, 7]] });
+	meaning('***x***', { text: 'x', b: [[0, 1]], i: [[0, 1]] });
+	meaning('<u>u</u>', { text: 'u', u: [[0, 1]] });
+});
+
+test('marks compare unordered, so <b><i>x</i></b> and <i><b>x</b></i> agree', () => {
+	assert.deepEqual(semanticsOfHtml('<b><i>x</i></b>'), semanticsOfHtml('<i><b>x</b></i>'));
+	// ...and <strong>/<em> mean what <b>/<i> mean.
+	assert.deepEqual(semanticsOfHtml('<strong>x</strong>'), semanticsOfHtml('<b>x</b>'));
+	assert.deepEqual(semanticsOfHtml('<em>x</em>'), semanticsOfHtml('<i>x</i>'));
+	// Adjacent same-mark elements mean what one merged element means.
+	assert.deepEqual(semanticsOfHtml('<b>a</b><b>b</b>'), semanticsOfHtml('<b>ab</b>'));
 });
 
 test('a literal asterisk in prose stays text and marks nothing', () => {
 	meaning('2 * 3 = 6', { text: '2 * 3 = 6' });
 	meaning('a * b * c', { text: 'a * b * c' });
 	// Escaped, so literal even hard up against a marker.
-	meaning('2\\*3 and **bold**', { text: '2*3 and bold', b: 'bold' });
+	meaning('2\\*3 and **bold**', { text: '2*3 and bold', b: [[8, 12]] });
 });
 
 test('a space before a marker keeps a stray asterisk harmless', () => {
 	// The flanking rule saves this: a closer must FOLLOW non-whitespace, so the
 	// marker cannot close and the stray asterisk has nothing to pair with. This
 	// is why ordinary prose survives, and it is the case worth protecting.
-	meaning('2*3 and **bold**', { text: '2*3 and bold', b: 'bold' });
-	meaning('note* and **bold**', { text: 'note* and bold', b: 'bold' });
+	meaning('2*3 and **bold**', { text: '2*3 and bold', b: [[8, 12]] });
+	meaning('note* and **bold**', { text: 'note* and bold', b: [[10, 14]] });
 });
 
 test('a backslash inside a formatted run stays literal and keeps its mark', () => {
 	// Regression: this dissolved the bold and ate the backslash before a8821ab.
-	meaning('**C:\\\\**', { text: 'C:\\', b: 'C:\\' });
-	meaning('*a\\\\*', { text: 'a\\', i: 'a\\' });
-	meaning('<u>a\\\\</u>', { text: 'a\\', u: 'a\\' });
-	meaning('**a\\\\\\\\**', { text: 'a\\\\', b: 'a\\\\' });
+	meaning('**C:\\\\**', { text: 'C:\\', b: [[0, 3]] });
+	meaning('*a\\\\*', { text: 'a\\', i: [[0, 2]] });
+	meaning('<u>a\\\\</u>', { text: 'a\\', u: [[0, 2]] });
+	meaning('**a\\\\\\\\**', { text: 'a\\\\', b: [[0, 3]] });
 });
 
 // ── Known limitation: stray delimiters re-pairing across a marker ────────────
@@ -132,25 +157,25 @@ test('a backslash inside a formatted run stays literal and keeps its mark', () =
 // flip green the day the parser is corrected. Don't "fix" them by asserting the
 // broken output.
 test('KNOWN: bold after "(" survives a stray asterisk', { todo: 'parser re-pairs runs across the marker' }, () => {
-	meaning('2*3 (**six**)', { text: '2*3 (six)', b: 'six' });
+	meaning('2*3 (**six**)', { text: '2*3 (six)', b: [[5, 8]] });
 });
 
 test('KNOWN: bold after a quote survives a stray asterisk', { todo: 'parser re-pairs runs across the marker' }, () => {
-	meaning('a*b "**quoted**"', { text: 'a*b "quoted"', b: 'quoted' });
+	meaning('a*b "**quoted**"', { text: 'a*b "quoted"', b: [[5, 11]] });
 });
 
 test('KNOWN: bold mid-word survives a stray asterisk', { todo: 'parser re-pairs runs across the marker' }, () => {
-	meaning('foo*bar**baz**', { text: 'foo*barbaz', b: 'baz' });
+	meaning('foo*bar**baz**', { text: 'foo*barbaz', b: [[7, 10]] });
 });
 
 test('a correctly escaped backslash before a marker is parsed right', () => {
 	// The parser is not at fault for `C:\` + bold: given the canonical the
 	// serializer OUGHT to emit, it renders correctly. Both readings below are the
 	// parser doing exactly the right thing.
-	meaning('C:\\\\**backup**', { text: 'C:\\backup', b: 'backup' });
+	meaning('C:\\\\**backup**', { text: 'C:\\backup', b: [[3, 9]] });
 	// Under-escaped, the backslash consumes the marker's first asterisk — which is
 	// what `\*` means. The defect is that domToMarkers emits THIS for the DOM
 	// `C:\<b>backup</b>`. That needs a real DOM, so it lives in the e2e semantic
 	// round trip, not here.
-	meaning('C:\\**backup**', { text: 'C:*backup*', i: 'backup' });
+	meaning('C:\\**backup**', { text: 'C:*backup*', i: [[3, 9]] });
 });

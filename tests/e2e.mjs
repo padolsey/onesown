@@ -33,6 +33,15 @@ function check(name, ok, detail = '') {
 	results.push({ name, ok, detail });
 	console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? ' — ' + detail : ''}`);
 }
+/**
+ * An expected failure: something known-broken, recorded so its blast radius can't
+ * widen quietly. Counted apart from real passes — a known limitation folded into
+ * a pass total reads as working software.
+ */
+function known(name, stillBroken, detail = '') {
+	results.push({ name, ok: stillBroken, detail, known: true });
+	console.log(`${stillBroken ? 'KNOWN' : 'FAIL '}  ${name}${detail ? ' — ' + detail : ''}`);
+}
 
 const browser = await chromium.launch({ executablePath: findChromium() });
 const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 }, acceptDownloads: true });
@@ -590,18 +599,28 @@ await otherTab.close();
 //
 // This drives the real Doc room, because the half the unit tests cannot reach is
 // domToMarkers, and that needs a real contenteditable.
+// Marks per POSITION, not per mark. Recording only the text each mark covers
+// cannot tell "<b>go</b> go" from "go <b>go</b>" — both say bold covers "go" —
+// so a mark that MOVED, the very thing this exists to catch, would compare equal.
+// Offsets are into each side's own rendered plaintext, which is sound: if the
+// plaintext differs the comparison has already failed on text; if it matches,
+// the indices line up by construction.
 const semantics = () =>
 	rich().evaluate((root) => {
-		const acc = { text: '', b: '', i: '', u: '' };
+		let text = '';
+		const marks = [];
 		const MARK = { B: 'b', STRONG: 'b', I: 'i', EM: 'i', U: 'u' };
 		const walk = (n, open) => {
 			for (const c of n.childNodes) {
 				if (c.nodeType === 3) {
-					const v = c.nodeValue ?? '';
-					acc.text += v;
-					for (const m of open) acc[m] += v;
+					const here = [...new Set(open)].sort().join('') || '-';
+					for (const ch of c.nodeValue ?? '') {
+						text += ch;
+						marks.push(here);
+					}
 				} else if (c.nodeName === 'BR') {
-					acc.text += '\n';
+					text += '\n';
+					marks.push('-');
 				} else if (c.nodeType === 1) {
 					const m = MARK[c.nodeName];
 					walk(c, m ? [...open, m] : open);
@@ -609,10 +628,18 @@ const semantics = () =>
 			}
 		};
 		walk(root, []);
-		acc.text = acc.text.replace(/\n$/, ''); // trailing caret placeholder is not content
-		return acc;
+		if (text.endsWith('\n')) {
+			text = text.slice(0, -1); // trailing caret placeholder is not content
+			marks.pop();
+		}
+		return { text, marks: marks.join('') };
 	});
-const sameSem = (a, b) => a.text === b.text && a.b === b.b && a.i === b.i && a.u === b.u;
+const sameSem = (a, b) => a.text === b.text && a.marks === b.marks;
+/** Expected marks string: `mark` covering `word`, nothing else set. */
+const marksFor = (text, mark, word) => {
+	const at = text.indexOf(word);
+	return Array.from(text, (_, i) => (i >= at && i < at + word.length ? mark : '-')).join('');
+};
 
 // The cases must start from what the WRITER BUILT, not from a canonical string:
 // rendering a draft that is already mis-parsed and checking it stays mis-parsed
@@ -622,20 +649,23 @@ const sameSem = (a, b) => a.text === b.text && a.b === b.b && a.i === b.i && a.u
 // Type the whole line, then select a word and bold it — what a writer does, and
 // deterministic. (Toggling B at a collapsed caret and typing into it does not
 // survive serialize() re-entering the editor, which is its own question.)
-const boldBtn = () => page.locator('button[title="Bold (Ctrl+B)"]');
+const markBtn = (m) => page.locator(`button[title="${m} (Ctrl+${m[0]})"]`);
 async function writeInDoc(text, boldWord) {
 	await tab('Doc').click();
 	await rich().click();
 	await page.keyboard.press('Control+a');
 	await page.keyboard.press('Delete');
-	// The bold typing-state survives clearing, so without this the previous case
-	// leaks in: the whole line types bold, and bolding the target word toggles it
-	// OFF. Both sides of the comparison then agree, and the case reports faithful
-	// while measuring the exact inverse of its name.
+	// Typing-state survives clearing, so without this the previous case leaks in:
+	// the whole line types bold, and bolding the target word toggles it OFF. Both
+	// sides of the comparison then agree, and the case reports faithful while
+	// measuring the exact inverse of its name. Reset every mark, not just bold —
+	// a leaked italic would do the same thing one level quieter.
 	await page.waitForTimeout(100);
-	if ((await boldBtn().getAttribute('aria-pressed')) === 'true') {
-		await boldBtn().click();
-		await page.waitForTimeout(100);
+	for (const m of ['Bold', 'Italic', 'Underline']) {
+		if ((await markBtn(m).getAttribute('aria-pressed')) === 'true') {
+			await markBtn(m).click();
+			await page.waitForTimeout(80);
+		}
 	}
 	await page.keyboard.type(text);
 	await page.waitForTimeout(150);
@@ -655,7 +685,7 @@ async function writeInDoc(text, boldWord) {
 		}
 		throw new Error('could not select ' + JSON.stringify(sub));
 	}, boldWord);
-	await boldBtn().click();
+	await markBtn('Bold').click();
 	await page.waitForTimeout(250);
 }
 
@@ -684,12 +714,14 @@ for (const c of SEMANTIC_CASES) {
 	const intent = await semantics(); // what the writer actually built
 	// Verify the fixture before trusting the result. A round trip between two
 	// identically-wrong states looks faithful, so a case that failed to set up is
-	// worse than useless — it reports green. This assertion is the difference
-	// between measuring the codec and measuring nothing.
+	// worse than useless — it reports green. Compare the WHOLE structure, not just
+	// the text and the bold: a leaked italic would otherwise sit on both sides and
+	// pass this check while poisoning the comparison.
+	const wantMarks = marksFor(c.text, 'b', c.bold);
 	check(
 		`fixture built as intended: ${c.name}`,
-		intent.text === c.text && intent.b === c.bold,
-		`wanted text ${JSON.stringify(c.text)} bold ${JSON.stringify(c.bold)}, built ${JSON.stringify(intent)}`
+		intent.text === c.text && intent.marks === wantMarks,
+		`wanted text ${JSON.stringify(c.text)} marks ${JSON.stringify(wantMarks)}, built ${JSON.stringify(intent)}`
 	);
 	await tab('Term').click(); // force the draft through the canonical string
 	await page.waitForTimeout(150);
@@ -698,17 +730,23 @@ for (const c of SEMANTIC_CASES) {
 	const survived = await semantics(); // ...and what came back
 	const held = sameSem(intent, survived);
 	const trace = `wrote ${JSON.stringify(intent)} · got back ${JSON.stringify(survived)}`;
-	check(
-		`meaning survives a room switch: ${c.name}`,
-		held === c.faithful,
-		held === c.faithful
-			? c.faithful
-				? ''
-				: `known limitation, unchanged — ${trace}`
-			: c.faithful
-				? `REGRESSED — ${trace}`
-				: `now FAITHFUL: the codec was fixed, flip this case to faithful:true — ${trace}`
-	);
+	if (c.faithful) {
+		check(`meaning survives a room switch: ${c.name}`, held, held ? '' : `REGRESSED — ${trace}`);
+	} else {
+		known(
+			`meaning survives a room switch: ${c.name}`,
+			!held,
+			held ? `now FAITHFUL: the codec was fixed, flip this case to faithful:true — ${trace}` : trace
+		);
+		// A known limitation is licence for one specific wrong answer, not for any
+		// wrong answer. Pinning the exact corruption would enshrine it, so pin a
+		// floor instead: the words must still be there and the editor still usable.
+		check(
+			`known limitation stays bounded: ${c.name}`,
+			survived.text.includes(c.bold) && survived.text.length > 0,
+			`the writer's word ${JSON.stringify(c.bold)} must survive even when its mark does not — ${trace}`
+		);
+	}
 }
 
 // Both terminal guards, together and last, so an appended section can't fall
@@ -720,5 +758,9 @@ check('no cross-origin requests', crossOrigin.length === 0, crossOrigin.slice(0,
 
 await browser.close();
 const failed = results.filter((r) => !r.ok);
-console.log(`\n${results.length - failed.length}/${results.length} passed · screenshots in ${SHOTS}`);
+const expected = results.filter((r) => r.known && r.ok);
+const real = results.length - expected.length;
+console.log(
+	`\n${real - failed.length}/${real} passed · ${expected.length} known limitation${expected.length === 1 ? '' : 's'} · ${failed.length} failed · screenshots in ${SHOTS}`
+);
 process.exit(failed.length ? 1 : 0);

@@ -23,13 +23,35 @@
 export interface Semantics {
 	/** The plaintext a reader sees. */
 	text: string;
-	/** For each mark, the concatenated text it covers. */
-	b: string;
-	i: string;
-	u: string;
+	/**
+	 * One character per character of `text`: the marks covering that position,
+	 * sorted, or '-' for none. So "go go" with the first word bold is "bb---" and
+	 * with the second bold is "---bb".
+	 *
+	 * Positions, not per-mark covered text. Recording only the covered text cannot
+	 * tell those two apart — both say bold covers "go" — and a mark that MOVED is
+	 * exactly what this is here to catch. Offsets are into the rendered plaintext
+	 * of each side, so they are directly comparable: if the plaintext differs, the
+	 * comparison has already failed on `text` and the marks don't matter; if it
+	 * matches, the indices line up by construction.
+	 */
+	marks: string;
 }
 
-const MARK: Record<string, keyof Omit<Semantics, 'text'>> = {
+/** Build an expected `marks` string from half-open ranges over the plaintext. */
+export function marksOver(text: string, ranges: { b?: [number, number][]; i?: [number, number][]; u?: [number, number][] }): string {
+	const at: Set<string>[] = Array.from(text, () => new Set<string>());
+	for (const mark of ['b', 'i', 'u'] as const) {
+		for (const [start, end] of ranges[mark] ?? []) {
+			if (start < 0 || end > text.length || start > end) throw new Error(`range ${start}..${end} outside ${JSON.stringify(text)}`);
+			for (let i = start; i < end; i++) at[i].add(mark);
+		}
+	}
+	return at.map((s) => [...s].sort().join('') || '-').join('');
+}
+
+/** The browser is free to emit either spelling; they mean the same thing. */
+const MARK: Record<string, string> = {
 	b: 'b',
 	strong: 'b',
 	i: 'i',
@@ -44,11 +66,15 @@ const MARK: Record<string, keyof Omit<Semantics, 'text'>> = {
  * must not be used as one.
  */
 export function semanticsOfHtml(html: string): Semantics {
-	const out: Semantics = { text: '', b: '', i: '', u: '' };
-	const open: (keyof Omit<Semantics, 'text'>)[] = [];
+	let text = '';
+	const marks: string[] = [];
+	const open: string[] = [];
 	const emit = (s: string) => {
-		out.text += s;
-		for (const m of open) out[m] += s;
+		const here = [...new Set(open)].sort().join('') || '-';
+		for (const ch of s) {
+			text += ch;
+			marks.push(here);
+		}
 	};
 	let i = 0;
 	while (i < html.length) {
@@ -88,19 +114,17 @@ export function semanticsOfHtml(html: string): Semantics {
 	if (open.length) throw new Error('unclosed ' + open.join(',') + ' in codec output: ' + html);
 	// A draft ending in \n renders an explicit placeholder <br> mirroring the one
 	// Chromium maintains. It is caret furniture, not content.
-	out.text = out.text.replace(/\n$/, '');
-	return out;
-}
-
-/** Meaning of a canonical draft string: what a reader of the rich rooms sees. */
-export function semanticsOfDraft(draft: string, markersToHtml: (s: string) => string): Semantics {
-	return semanticsOfHtml(markersToHtml(draft));
+	if (text.endsWith('\n')) {
+		text = text.slice(0, -1);
+		marks.pop();
+	}
+	return { text, marks: marks.join('') };
 }
 
 export function sameSemantics(a: Semantics, b: Semantics): boolean {
-	return a.text === b.text && a.b === b.b && a.i === b.i && a.u === b.u;
+	return a.text === b.text && a.marks === b.marks;
 }
 
 export function describe(s: Semantics): string {
-	return `text=${JSON.stringify(s.text)} b=${JSON.stringify(s.b)} i=${JSON.stringify(s.i)} u=${JSON.stringify(s.u)}`;
+	return `text=${JSON.stringify(s.text)} marks=${JSON.stringify(s.marks)}`;
 }
