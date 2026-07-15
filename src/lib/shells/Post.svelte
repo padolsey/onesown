@@ -69,7 +69,7 @@
 			type="button"
 			onclick={post}
 			disabled={doc.chars === 0 || remaining < 0}
-			class="rounded-full bg-sky-500 px-4 py-1.5 text-[14px] font-bold text-white transition-colors hover:bg-sky-600 disabled:cursor-not-allowed disabled:opacity-40"
+			class="post-btn rounded-full bg-sky-500 px-4 py-1.5 text-[14px] font-bold text-white transition-colors hover:bg-sky-600 disabled:cursor-not-allowed disabled:opacity-40"
 		>
 			{copied ? 'Copied ✓' : 'Post'}
 		</button>
@@ -78,3 +78,13 @@
 		<p class="mt-2 text-right text-[12px] text-red-600">{-remaining} over — the room is winning.</p>
 	{/if}
 </section>
+
+<style>
+	/* White text on a blue pill, sitting on a white card: the global currentColor
+	   ring would be white on white. sky-600 (the button's own hover colour) rather
+	   than its sky-500 fill — 500 doesn't clear 3:1 against the card. */
+	.post-btn:focus-visible {
+		outline-color: var(--color-sky-600);
+		outline-offset: 3px;
+	}
+</style>

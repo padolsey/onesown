@@ -417,6 +417,16 @@
 		border-color: var(--fg);
 		color: var(--bg);
 	}
+	/* The global ring is `currentColor`, but this tab inverts its text to the
+	   topbar's own colour — so the ring would be painted in the surface it sits
+	   on (1:1, invisible), and it's the first thing Tab lands on. Ring in --fg
+	   instead, offset clear of the tab's own --fg fill. Deliberately not a global
+	   token: rooms like Term paint their own surface without redefining --fg, and
+	   there `currentColor` is already right. */
+	.room-tab[aria-pressed='true']:focus-visible {
+		outline-color: var(--fg);
+		outline-offset: 3px;
+	}
 	.room-status {
 		color: var(--muted);
 		font-size: 0.7rem;

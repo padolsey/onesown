@@ -89,7 +89,7 @@
 		<button
 			type="button"
 			onclick={send}
-			class="mr-2 rounded-md bg-[#1a73e8] px-5 py-1.5 text-[13.5px] font-medium text-white transition-colors hover:bg-[#1765cc]"
+			class="mail-send mr-2 rounded-md bg-[#1a73e8] px-5 py-1.5 text-[13.5px] font-medium text-white transition-colors hover:bg-[#1765cc]"
 		>
 			{sent ? 'Copied ✓' : 'Send'}
 		</button>
@@ -114,6 +114,13 @@
 </section>
 
 <style>
+	/* White text on a blue button, sitting on a white card: the global
+	   currentColor ring would be white on white. Ring in the button's own blue,
+	   which reads against the card. */
+	.mail-send:focus-visible {
+		outline-color: #1a73e8;
+		outline-offset: 3px;
+	}
 	/* iOS Safari zooms the page when focusing fields under 16px. */
 	@media (pointer: coarse) {
 		input {

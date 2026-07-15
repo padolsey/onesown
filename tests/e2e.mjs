@@ -341,6 +341,42 @@ const sysScheme = await page.evaluate(() => getComputedStyle(document.documentEl
 check('system theme releases the root back to the OS', sysScheme === 'light dark', sysScheme);
 await prefsBtn().click();
 
+// The active room tab inverts its text to the topbar's own colour, so a
+// currentColor focus ring would be painted in the surface it sits on — and it is
+// the first thing Tab reaches. Must be a real keypress: .focus() won't set
+// :focus-visible. Settle first — Tailwind's transition-colors animates
+// outline-color, so an immediate read catches the ring mid-fade.
+await page.locator('button.room-tab[aria-pressed="true"]').focus();
+await page.keyboard.press('Shift+Tab');
+await page.keyboard.press('Tab');
+await page.waitForTimeout(400);
+const ring = await page.evaluate(() => {
+	const el = document.activeElement;
+	if (!el?.classList.contains('room-tab')) return { bad: 'tab did not land on a room tab' };
+	const toRGB = (css) => {
+		const c = document.createElement('canvas').getContext('2d');
+		c.fillStyle = '#000';
+		c.fillStyle = css;
+		c.fillRect(0, 0, 1, 1);
+		const d = c.getImageData(0, 0, 1, 1).data;
+		return [d[0], d[1], d[2]];
+	};
+	const lum = ([r, g, b]) => {
+		const f = (c) => ((c /= 255) <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+		return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+	};
+	const cs = getComputedStyle(el);
+	// The ring is drawn outside the border box, onto the topbar's surface.
+	const behind = getComputedStyle(document.querySelector('.room-app')).backgroundColor;
+	const [a, b] = [lum(toRGB(cs.outlineColor)), lum(toRGB(behind))].sort((x, y) => y - x);
+	return { visible: el.matches(':focus-visible'), ratio: +((a + 0.05) / (b + 0.05)).toFixed(2) };
+});
+check(
+	'focus ring on the active room tab is visible',
+	ring.visible && ring.ratio >= 3,
+	JSON.stringify(ring) + ' (WCAG 1.4.11 needs 3:1)'
+);
+
 await tab('Post').click();
 await prefsBtn().click();
 await page.locator('label', { hasText: '500' }).locator('input').check();
