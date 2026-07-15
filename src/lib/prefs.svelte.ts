@@ -1,5 +1,5 @@
 /**
- * Writer preferences: theme override, typewriter scrolling, word goal, room
+ * Writer preferences: theme override, word goal, room
  * flavor variants, and the "Yours" room's lighting. Persisted to localStorage
  * separately from the draft. `focus` is deliberately ephemeral — a session
  * posture, not a setting. Module-level runes state; never written during SSR.
@@ -42,7 +42,6 @@ const KEY = 'onesown:prefs:v1';
 const DEFAULT_YOURS: YoursConfig = { font: 'serif', ink: 'ink', paper: 'cream', width: 'narrow', size: 'm' };
 
 let theme = $state<Theme>('system');
-let typewriter = $state(false);
 let goal = $state<number | null>(null);
 let padPaper = $state<PadPaper>('yellow');
 let termPhosphor = $state<TermPhosphor>('green');
@@ -57,7 +56,7 @@ function persist() {
 	try {
 		localStorage.setItem(
 			KEY,
-			JSON.stringify({ v: 1, theme, typewriter, goal, padPaper, termPhosphor, postLimit, yours })
+			JSON.stringify({ v: 1, theme, goal, padPaper, termPhosphor, postLimit, yours })
 		);
 	} catch {
 		// storage unavailable — preferences just won't survive the session
@@ -75,7 +74,6 @@ function load() {
 		if (raw) {
 			const d = JSON.parse(raw) as Record<string, unknown>;
 			theme = oneOf(d.theme, ['system', 'light', 'dark'] as const) ?? 'system';
-			typewriter = d.typewriter === true;
 			goal = typeof d.goal === 'number' && d.goal > 0 ? Math.floor(d.goal) : null;
 			padPaper = oneOf(d.padPaper, ['yellow', 'white'] as const) ?? 'yellow';
 			termPhosphor = oneOf(d.termPhosphor, ['green', 'amber'] as const) ?? 'green';
@@ -101,13 +99,6 @@ export const prefs = {
 	},
 	set theme(v: Theme) {
 		theme = v;
-		persist();
-	},
-	get typewriter() {
-		return typewriter;
-	},
-	set typewriter(v: boolean) {
-		typewriter = v;
 		persist();
 	},
 	get goal() {

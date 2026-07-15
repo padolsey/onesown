@@ -62,21 +62,13 @@ const sameOrigin = (url) => {
 		return false;
 	}
 };
-// Every context this run opens must be watched, or a later section that needs its
-// own context becomes a hole in the one guard the product's promise rests on.
-function watchOrigins(c) {
-	c.on('request', (r) => {
-		const url = r.url();
-		if (/^https?:/.test(url) && !sameOrigin(url)) crossOrigin.push(url);
-	});
-	// WebSockets are reported by neither request listener, so they need their own.
-	// Compare origins rather than prefixing BASE — the dev server's HMR socket is
-	// same-origin on a different scheme and must not read as a leak.
-	c.on('page', (p) => p.on('websocket', (ws) => {
-		if (!sameOrigin(ws.url().replace(/^ws/, 'http'))) crossOrigin.push(ws.url());
-	}));
-}
-watchOrigins(ctx);
+ctx.on('request', (r) => {
+	const url = r.url();
+	if (/^https?:/.test(url) && !sameOrigin(url)) crossOrigin.push(url);
+});
+// WebSockets are not reported as requests by either listener, so they need their
+// own. Compare origins rather than prefixing BASE — the dev server's HMR socket
+// is same-origin on a different scheme and must not read as a leak.
 page.on('websocket', (ws) => {
 	if (!sameOrigin(ws.url().replace(/^ws/, 'http'))) crossOrigin.push(ws.url());
 });
@@ -756,122 +748,6 @@ for (const c of SEMANTIC_CASES) {
 		);
 	}
 }
-
-// ── 19. Typewriter scrolling aims at the viewport the writer can SEE ─────────
-//
-// A soft keyboard does not shrink window.innerHeight on iOS — it shrinks only
-// the visual viewport. Centring against innerHeight therefore aims the caret
-// into the keyboard: measured at 92% of the visible strip in portrait and 106%
-// (i.e. behind it) in landscape. There is no soft keyboard in headless Chromium,
-// so the keyboard is modelled the way iOS behaves — layout viewport untouched,
-// visual viewport shortened — by substituting window.visualViewport before the
-// app loads. That tests OUR arithmetic against the real app; it does not test
-// Safari, which remains device-only.
-const fakeKeyboard = ({ visible, offset }) => {
-	class Strip extends EventTarget {
-		get height() {
-			return visible;
-		}
-		get width() {
-			return window.innerWidth;
-		}
-		get offsetTop() {
-			return offset;
-		}
-		get offsetLeft() {
-			return 0;
-		}
-		get pageTop() {
-			return window.scrollY + offset;
-		}
-		get pageLeft() {
-			return 0;
-		}
-		get scale() {
-			return 1;
-		}
-	}
-	const strip = new Strip();
-	Object.defineProperty(window, 'visualViewport', { get: () => strip, configurable: true });
-};
-
-async function caretPercentOfVisible({ layout, visible, offset = 0, atEnd = false, typewriter = true }) {
-	const tctx = await browser.newContext({ viewport: { width: 390, height: layout } });
-	watchOrigins(tctx);
-	await tctx.addInitScript(fakeKeyboard, { visible, offset });
-	await tctx.addInitScript(
-		(tw) => localStorage.setItem('onesown:prefs:v1', JSON.stringify({ v: 1, typewriter: tw })),
-		typewriter
-	);
-	const p = await tctx.newPage();
-	await p.goto(BASE + '/', { waitUntil: 'networkidle' });
-	const ed = p.locator('textarea');
-	await ed.click();
-	await ed.fill(Array.from({ length: 120 }, (_, i) => `line ${i}`).join('\n'));
-	await p.waitForTimeout(200);
-	await ed.evaluate((el, end) => {
-		const at = end ? el.value.length : Math.floor(el.value.length / 2);
-		el.focus();
-		el.setSelectionRange(at, at);
-	}, atEnd);
-	await p.keyboard.type('xyz');
-	await p.waitForTimeout(400);
-	// Locate the caret independently of the app: the draft is one short line per
-	// row, so nothing wraps and the caret's line is just the newline count. Using
-	// the app's own caret.ts would both measure the code under test with itself
-	// and only exist on the dev server, where /src/lib/*.ts is served — against a
-	// built deployment that import 404s.
-	const r = await p.evaluate(() => {
-		const ta = document.querySelector('textarea');
-		const lineHeight = parseFloat(getComputedStyle(ta).lineHeight);
-		if (!Number.isFinite(lineHeight)) throw new Error('line-height is not resolvable in px');
-		const line = ta.value.slice(0, ta.selectionEnd).split('\n').length - 1;
-		const caret = ta.getBoundingClientRect().top + line * lineHeight;
-		const view = window.visualViewport;
-		const se = document.scrollingElement;
-		return {
-			pct: ((caret - view.offsetTop) / view.height) * 100,
-			pinned: window.scrollY >= se.scrollHeight - window.innerHeight - 1
-		};
-	});
-	await tctx.close();
-	return r;
-}
-const caretPct = async (opts) => (await caretPercentOfVisible(opts)).pct;
-
-// Desktop: visual viewport == layout viewport, so the fix must be a no-op here.
-const twDesktop = await caretPct({ layout: 800, visible: 800 });
-check('typewriter centres the caret with no keyboard', Math.abs(twDesktop - 45) < 6, `${twDesktop.toFixed(0)}% down the visible strip, want ~45%`);
-// Portrait: innerHeight 660 while only 324px is visible. Aimed at 92% before.
-const twPortrait = await caretPct({ layout: 660, visible: 324 });
-check('typewriter centres the caret with a keyboard open', Math.abs(twPortrait - 45) < 6, `${twPortrait.toFixed(0)}% down the visible strip, want ~45%`);
-// Landscape is the unconditional one: the caret was put BEHIND the keyboard.
-const twLandscape = await caretPct({ layout: 330, visible: 140 });
-check('typewriter never puts the caret behind the keyboard', twLandscape < 100, `${twLandscape.toFixed(0)}% down the visible strip — over 100 is behind it`);
-// The strip can also be offset within the layout viewport, not just shortened.
-const twOffset = await caretPct({ layout: 660, visible: 324, offset: 80 });
-check('typewriter respects a visual viewport that is offset, not just shorter', Math.abs(twOffset - 45) < 6, `${twOffset.toFixed(0)}% down the visible strip, want ~45%`);
-
-// The end of the draft is where writing happens, and where the page used to run
-// out: no room left to scroll, so the caret stayed put — 85% on desktop, 167%
-// (behind the keyboard) on a phone — however right the arithmetic was.
-const twEndDesktop = await caretPercentOfVisible({ layout: 800, visible: 800, atEnd: true });
-check('typewriter centres the last line of a draft', Math.abs(twEndDesktop.pct - 45) < 6, `${twEndDesktop.pct.toFixed(0)}% down the visible strip, want ~45%${twEndDesktop.pinned ? ' (page pinned — no room to scroll past the end)' : ''}`);
-const twEndPhone = await caretPercentOfVisible({ layout: 660, visible: 324, atEnd: true });
-check('typewriter centres the last line with a keyboard open', Math.abs(twEndPhone.pct - 45) < 6, `${twEndPhone.pct.toFixed(0)}% down the visible strip, want ~45%${twEndPhone.pinned ? ' (page pinned — no room to scroll past the end)' : ''}`);
-
-// The run-off is typewriter's alone. Everyone else must not inherit a screenful
-// of empty scroll for a mode they never turned on.
-const runoff = await (async () => {
-	const c = await browser.newContext({ viewport: { width: 390, height: 660 } });
-	watchOrigins(c);
-	const p = await c.newPage();
-	await p.goto(BASE + '/', { waitUntil: 'networkidle' });
-	const scrollable = await p.evaluate(() => document.scrollingElement.scrollHeight > window.innerHeight + 1);
-	await c.close();
-	return scrollable;
-})();
-check('an empty draft does not scroll when typewriter is off', !runoff, runoff ? 'the page scrolls with nothing written and typewriter off' : '');
 
 // Both terminal guards, together and last, so an appended section can't fall
 // outside them the way this one silently did.

@@ -1,8 +1,6 @@
 <script lang="ts">
 	import { tick } from 'svelte';
 	import { doc } from './state.svelte';
-	import { prefs } from './prefs.svelte';
-	import { caretViewportTop } from './caret';
 
 	let {
 		placeholder = '',
@@ -34,7 +32,6 @@
 
 	function trackSelection() {
 		if (el) doc.setSelection(el.selectionStart ?? 0, el.selectionEnd ?? 0);
-		maybeCenter();
 	}
 
 	/**
@@ -105,30 +102,6 @@
 		if (!marker) return;
 		e.preventDefault();
 		void toggleMarker(marker);
-	}
-
-	// Typewriter scrolling: keep the caret's line near the vertical center of what
-	// the writer can actually see.
-	//
-	// Not innerHeight — that's the layout viewport, and iOS Safari doesn't shrink
-	// it for the soft keyboard, so centring against it aims the caret into the
-	// keyboard. Measured against a 660px layout with a 324px visible strip, the
-	// caret landed at 92% of the strip; in landscape (330/140) at 106% — behind
-	// the keyboard, on every keystroke.
-	//
-	// visualViewport.height is the strip the writer sees, and offsetTop is where
-	// that strip sits inside the layout viewport. Caret rects are in layout
-	// coordinates, so both terms are needed to land at 45% of the visible strip.
-	function maybeCenter() {
-		if (!prefs.typewriter || !el || document.activeElement !== el) return;
-		requestAnimationFrame(() => {
-			if (!el || document.activeElement !== el) return;
-			const view = window.visualViewport;
-			const height = view?.height ?? window.innerHeight;
-			const top = view?.offsetTop ?? 0;
-			const delta = caretViewportTop(el) - top - height * 0.45;
-			if (Math.abs(delta) > 24) window.scrollBy({ top: delta, behavior: 'auto' });
-		});
 	}
 </script>
 

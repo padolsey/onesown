@@ -16,10 +16,9 @@ storage; **Save to disk** (⌘S / Ctrl+S) writes a plain `.txt` file via the Fil
 System Access API, or downloads one where that isn't available. The app works
 offline after one visit (same-origin service worker) and installs as a PWA.
 
-For writers: **Focus mode** (⌘. / Ctrl+. — Esc to leave) hides all chrome,
-**typewriter scrolling** keeps the caret line vertically centered, a **word
-goal** shows progress in each room's own idiom, and the theme can be pinned
-light/dark independent of the OS.
+For writers: **Focus mode** (⌘. / Ctrl+. — Esc to leave) hides all chrome, a
+**word goal** shows progress in each room's own idiom, and the theme can be
+pinned light/dark independent of the OS.
 
 ## How it works
 
@@ -34,9 +33,9 @@ light/dark independent of the OS.
   markers to HTML and serialize their DOM back. Its invariant — serializer
   output must be a fixed point of the parser — is enforced by the unit tests
   and an E2E idempotence sweep over hostile drafts.
-- **Preferences** (`src/lib/prefs.svelte.ts`) — theme, typewriter scrolling,
-  word goal, room variants, and the Yours room's lighting — persist in their
-  own `localStorage` key; focus mode is deliberately ephemeral.
+- **Preferences** (`src/lib/prefs.svelte.ts`) — theme, word goal, room variants,
+  and the Yours room's lighting — persist in their own `localStorage` key; focus
+  mode is deliberately ephemeral.
 - **Offline** (`src/service-worker.js`) — a strictly same-origin service
   worker, cache keyed by the deployed commit, registered in production only.
 
