@@ -14,7 +14,7 @@ import {
 	derive,
 	inkFor,
 	luminance,
-	maxImageOpacity,
+	washFor,
 	oklchToRgb,
 	rgbToOklch,
 	sampleClusters,
@@ -139,41 +139,56 @@ test('worstContrast catches an ink hiding inside the backdrop range', () => {
 });
 
 test('the wash can never make the room unreadable', () => {
-	// Opacity is derived, not chosen. Whatever photograph arrives, the opacity it
-	// is allowed must leave the ink legible against the composite.
+	// Whatever photograph arrives, the opacity it is allowed must leave ITS ink
+	// legible against the composite — not against the bare paper.
 	const papers: RGB[] = [[250, 246, 236], [15, 15, 25], [128, 128, 128], [255, 255, 255], [0, 0, 0]];
 	const extremes: [RGB, RGB][] = [
-		[[0, 0, 0], [255, 255, 255]], // a photo spanning the full range
+		[[0, 0, 0], [255, 255, 255]], // deep shadows AND blown highlights
 		[[0, 0, 0], [0, 0, 0]], // all black
 		[[255, 255, 255], [255, 255, 255]], // all white
-		[[120, 118, 116], [134, 130, 126]], // flat mid-grey, the worst case for ink
+		[[120, 118, 116], [134, 130, 126]], // flat mid-grey
 		[[200, 120, 90], [250, 200, 170]] // a sunset
 	];
+	const mix = (x: RGB, y: RGB, t: number) => x.map((v, i) => v * (1 - t) + y[i] * t) as RGB;
 	for (const paper of papers) {
 		for (const hue of HUES) {
-			const ink = inkFor(paper, hue).rgb;
 			for (const [lo, hi] of extremes) {
-				const a = maxImageOpacity(paper, ink, lo, hi);
-				assert.ok(a >= 0 && a <= 1, `opacity ${a} out of range`);
-				// At the opacity it permits, the ink must genuinely still hold.
-				const mix = (x: RGB, y: RGB, t: number) => x.map((v, i) => v * (1 - t) + y[i] * t) as RGB;
-				const l1 = luminance(mix(paper, lo, a));
-				const l2 = luminance(mix(paper, hi, a));
+				const { ink, opacity } = washFor(paper, hue, lo, hi);
+				assert.ok(opacity >= 0 && opacity <= 1, `opacity ${opacity} out of range`);
+				const l1 = luminance(mix(paper, lo, opacity));
+				const l2 = luminance(mix(paper, hi, opacity));
 				const got = worstContrast(ink, Math.min(l1, l2), Math.max(l1, l2));
 				assert.ok(
 					got >= AA - 0.001,
-					`paper ${paper} ink ${ink} photo ${lo}..${hi} allowed ${a} but measures ${got.toFixed(3)}:1`
+					`paper ${paper} hue ${hue} photo ${lo}..${hi} allowed ${opacity} but measures ${got.toFixed(3)}:1`
 				);
 			}
 		}
 	}
 });
 
+test('the wash is not starved by solving the ink in the wrong order', () => {
+	// The trap this whole function exists for. Solving the ink against the bare
+	// paper first yields the GENTLEST passing ink, at 4.500:1 with no margin — so
+	// the first drop of photograph eats the allowance and the wash caps near 1%.
+	// It looks like the guarantee protecting the writer; it is the order being
+	// wrong. A flat photograph of a colour close to the paper must be allowed at
+	// full strength, and that is the case the wrong order fails hardest.
+	const paper: RGB = [201, 191, 168];
+	const flat: RGB = [201, 191, 168];
+	const { opacity } = washFor(paper, [47, 43, 37], flat, flat);
+	assert.ok(opacity > 0.9, `a flat photo of the paper's own colour was capped at ${opacity}`);
+	// A photo with both deep shadows and blown highlights admits no legible ink at
+	// any real strength, and must be starved — the same function, opposite answer.
+	const harsh = washFor(paper, [47, 43, 37], [0, 0, 0], [255, 255, 255]);
+	assert.ok(harsh.opacity < 0.5, `a full-range photo was allowed ${harsh.opacity}`);
+});
+
 test('the wash opacity rounds down, never up', () => {
 	// toFixed rounds half-up, toward the cliff — which is how a 4.495:1 ships
 	// claiming to be 4.5. Everything bounding a guarantee floors.
-	const a = maxImageOpacity([250, 246, 236], [30, 25, 20], [0, 0, 0], [255, 255, 255]);
-	assert.equal(a, Math.floor(a * 1000) / 1000);
+	const { opacity } = washFor([250, 246, 236], [47, 43, 37], [0, 0, 0], [255, 255, 255]);
+	assert.equal(opacity, Math.floor(opacity * 1000) / 1000);
 });
 
 test('a photograph makes a legible room, including the degenerate ones', () => {

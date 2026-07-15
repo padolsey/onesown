@@ -433,17 +433,74 @@ check('post limit variant', (await page.locator('section span.tabular-nums').tex
 await page.locator('label', { hasText: '280' }).locator('input').check();
 await prefsBtn().click();
 
+// ── 13b. Yours: the room you furnish, and cannot make unreadable ────────────
+//
+// The old room let you choose the ink, so half its paper/ink pairs failed AA and
+// `ink on dusk` rendered at 1.10:1 — you could destroy the room and the only way
+// back was trial and error. Ink is a hue now: you pick the pigment's character
+// and the room solves what it looks like on this paper, so the guarantee is the
+// engine's rather than the writer's restraint. src/lib/palette.ts proves that
+// over 75,816 pairs; this proves the room is actually wired to it.
 await tab('Yours').click();
-await page.locator('label', { hasText: 'Paper' }).locator('select').selectOption('night');
-await page.waitForTimeout(700);
-await page.reload({ waitUntil: 'networkidle' });
-check('yours room persists customization', await page.evaluate(() => {
-	const p = JSON.parse(localStorage.getItem('onesown:prefs:v1') || '{}');
-	return p.yours?.paper === 'night';
-}));
-check('yours room renders custom paper', await page.evaluate(() =>
-	getComputedStyle(document.querySelector('main section')).backgroundColor === 'rgb(15, 15, 17)'));
-await page.locator('label', { hasText: 'Paper' }).locator('select').selectOption('cream');
+await page.waitForTimeout(1400); // let the save settle: the topbar reflows on it
+const roomInk = () =>
+	page.evaluate(() => {
+		const parse = (s) => s.match(/\d+/g).slice(0, 3).map(Number);
+		const lum = ([r, g, b]) => {
+			const f = (v) => ((v /= 255) <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
+			return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+		};
+		const paper = parse(getComputedStyle(document.querySelector('main section')).backgroundColor);
+		const ink = parse(getComputedStyle(document.querySelector('textarea')).color);
+		const [hi, lo] = [lum(paper), lum(ink)].sort((a, b) => b - a);
+		return { paper: '#' + paper.map((v) => v.toString(16).padStart(2, '0')).join(''), ratio: (hi + 0.05) / (lo + 0.05) };
+	});
+await prefsBtn().click();
+// Every room on offer must be legible, including the dark ones — that is the
+// combination the old room got worst.
+for (const name of ['Study', 'Snow', 'Manuscript', 'Greenroom', 'Blue Hour', 'Lamplight']) {
+	await page.locator('button.yours-door', { hasText: name }).click();
+	await page.waitForTimeout(200);
+	const r = await roomInk();
+	check(`yours: ${name} is legible`, r.ratio >= 4.5, `${r.ratio.toFixed(2)}:1 on ${r.paper}`);
+}
+// ...and so is every pigment on the darkest paper, which is where a chosen ink
+// used to disappear entirely.
+for (const pigment of ['ink', 'plum', 'moss', 'iron', 'sepia', 'indigo']) {
+	await page.locator(`button.yours-chip[aria-label="${pigment}"]`).click();
+	await page.waitForTimeout(200);
+	const r = await roomInk();
+	check(`yours: ${pigment} is legible on night paper`, r.ratio >= 4.5, `${r.ratio.toFixed(2)}:1 on ${r.paper}`);
+}
+// Reaching for a door makes the room BE it; leaving puts it back. Trying is not
+// choosing, so it must never be written.
+await page.locator('button.yours-door', { hasText: 'Snow' }).click();
+await page.waitForTimeout(200);
+const beforeTry = await roomInk();
+await page.locator('button.yours-door', { hasText: 'Lamplight' }).hover();
+await page.waitForTimeout(250);
+const whileTrying = await roomInk();
+check('yours: hovering a door makes the room become it', whileTrying.paper === '#0f0f11', `paper was ${whileTrying.paper}`);
+await page.locator('legend', { hasText: 'Theme' }).hover();
+await page.waitForTimeout(250);
+check('yours: leaving puts the room back', (await roomInk()).paper === beforeTry.paper, `paper stuck at ${(await roomInk()).paper}`);
+check(
+	'yours: trying a room is never written',
+	await page.evaluate(() => JSON.parse(localStorage.getItem('onesown:prefs:v1') || '{}').yours?.paper === '#ffffff'),
+	'a room that was only hovered got persisted'
+);
+// The ink is solved at render and must never be stored: a stored ink is a stored
+// chance to make the text invisible.
+check(
+	'yours: no ink is ever persisted',
+	await page.evaluate(() => {
+		const y = JSON.parse(localStorage.getItem('onesown:prefs:v1') || '{}').yours ?? {};
+		return !('ink' in y) && typeof y.hue === 'string' && typeof y.paper === 'string';
+	}),
+	'the room persisted an ink rather than a hue'
+);
+await page.locator('button.yours-door', { hasText: 'Study' }).click();
+await prefsBtn().click();
 
 // ── 14. Undo: the draft's history must outlive the room showing it ──────────
 await page.goto(BASE + '/', { waitUntil: 'networkidle' });

@@ -2,7 +2,9 @@
 	import { untrack, type Component } from 'svelte';
 	import { version } from '$app/environment';
 	import { doc, type ShellId } from '$lib/state.svelte';
-	import { prefs } from '$lib/prefs.svelte';
+	import { prefs, YOURS_HUES, YOURS_PAPERS, YOURS_ROOMS } from '$lib/prefs.svelte';
+	import { inkFor, type RGB } from '$lib/palette';
+	import { readPhoto } from '$lib/photo';
 	import { shellList } from '$lib/shells';
 	import Bare from '$lib/shells/Bare.svelte';
 	import Scratch from '$lib/shells/Scratch.svelte';
@@ -28,6 +30,38 @@
 	let isMac = $state(false);
 	let showAbout = $state(false);
 	let roomStrip = $state<HTMLDivElement | null>(null);
+
+	// Trying a room, rather than previewing one. Reaching for a door or a pigment
+	// makes the room BE that, at full size, with your own words in it — leaving
+	// puts it back exactly as it was. It's a patch laid over state and never a
+	// write, so nothing commits by accident and nothing needs undoing.
+	let previewRoom = $state<(typeof YOURS_ROOMS)[number] | null>(null);
+	let previewPaper = $state<string | null>(null);
+	let previewHue = $state<string | null>(null);
+
+	const hexToRgb = (h: string): RGB => [
+		parseInt(h.slice(1, 3), 16),
+		parseInt(h.slice(3, 5), 16),
+		parseInt(h.slice(5, 7), 16)
+	];
+	/** What this pigment looks like on this paper. Solved, never stored. */
+	const inkOf = (paper: string, hue: string) => {
+		const { rgb } = inkFor(hexToRgb(paper), hexToRgb(hue));
+		return '#' + rgb.map((v) => v.toString(16).padStart(2, '0')).join('');
+	};
+
+	$effect(() => {
+		const patch = previewRoom
+			? { paper: previewRoom.paper, hue: previewRoom.hue, font: previewRoom.font }
+			: { ...(previewPaper ? { paper: previewPaper } : {}), ...(previewHue ? { hue: previewHue } : {}) };
+		prefs.previewYours = Object.keys(patch).length ? patch : null;
+	});
+
+	async function takePhoto(file: File | undefined) {
+		if (!file) return;
+		const room = await readPhoto(file);
+		if (room) prefs.yours = { ...prefs.yours, paper: room.paper, hue: room.hue, photo: room.photo };
+	}
 
 	// Eight pills don't fit a phone, so the strip scrolls — and it always started
 	// at the left. The room is restored from the last session, so a writer who left
@@ -232,7 +266,7 @@
 				{/each}
 			</div>
 			<div class="ml-auto flex items-center gap-x-2">
-				<span class="room-status hidden md:inline">{statusText}</span>
+				<span class="room-status hidden md:inline-block">{statusText}</span>
 				<!-- Clear is the one destructive action, and touch has no ⌘Z — so the
 				     way back has to be visible, not just a shortcut. Expires on its own.
 				     Restores the cleared draft specifically, so it stays true to its
@@ -323,6 +357,147 @@
 									>
 								{/each}
 							</fieldset>
+						{:else if doc.shell === 'yours'}
+							<!-- The eighth room is furnished from here, alongside every other
+							     room's variants, rather than from a bar across its own paper.
+							     Hovering still works from up here: the popover is chrome and
+							     the room is behind it, so you try a room by looking at it. -->
+							<fieldset class="yours-rooms">
+								<legend>This room · rooms</legend>
+								{#each YOURS_ROOMS as r (r.name)}
+									<button
+										type="button"
+										class="yours-door"
+										style="background: {r.paper}; color: {inkOf(r.paper, r.hue)}; border-color: {inkOf(r.paper, r.hue)}44;"
+										onmouseenter={() => (previewRoom = r)}
+										onmouseleave={() => (previewRoom = null)}
+										onfocus={() => (previewRoom = r)}
+										onblur={() => (previewRoom = null)}
+										onclick={() => {
+											previewRoom = null;
+											prefs.yours = { ...prefs.yours, paper: r.paper, hue: r.hue, font: r.font };
+										}}
+									>
+										{r.name}
+									</button>
+								{/each}
+							</fieldset>
+							<fieldset class="yours-swatches">
+								<legend>Paper</legend>
+								{#each YOURS_PAPERS as p (p.id)}
+									<button
+										type="button"
+										class="yours-chip"
+										aria-label={p.name}
+										title={p.name}
+										aria-pressed={prefs.yours.paper === p.hex}
+										style="background: {p.hex};"
+										onmouseenter={() => (previewPaper = p.hex)}
+										onmouseleave={() => (previewPaper = null)}
+										onfocus={() => (previewPaper = p.hex)}
+										onblur={() => (previewPaper = null)}
+										onclick={() => {
+											previewPaper = null;
+											prefs.yours = { ...prefs.yours, paper: p.hex };
+										}}
+									></button>
+								{/each}
+							</fieldset>
+							<fieldset class="yours-swatches">
+								<legend>Pigment</legend>
+								{#each YOURS_HUES as h (h.id)}
+									<button
+										type="button"
+										class="yours-chip"
+										aria-label={h.name}
+										title={h.name}
+										aria-pressed={prefs.yours.hue === h.hex}
+										style="background: {inkOf(previewPaper ?? prefs.yours.paper, h.hex)};"
+										onmouseenter={() => (previewHue = h.hex)}
+										onmouseleave={() => (previewHue = null)}
+										onfocus={() => (previewHue = h.hex)}
+										onblur={() => (previewHue = null)}
+										onclick={() => {
+											previewHue = null;
+											prefs.yours = { ...prefs.yours, hue: h.hex };
+										}}
+									></button>
+								{/each}
+							</fieldset>
+							<fieldset>
+								<legend>Face</legend>
+								{#each ['serif', 'sans', 'mono', 'hand'] as const as f (f)}
+									<label
+										><input
+											type="radio"
+											name="yours-font"
+											checked={prefs.yours.font === f}
+											onchange={() => (prefs.yours = { ...prefs.yours, font: f })}
+										/>
+										{f}</label
+									>
+								{/each}
+							</fieldset>
+							<fieldset>
+								<legend>Size</legend>
+								{#each ['s', 'm', 'l'] as const as v (v)}
+									<label
+										><input
+											type="radio"
+											name="yours-size"
+											checked={prefs.yours.size === v}
+											onchange={() => (prefs.yours = { ...prefs.yours, size: v })}
+										/>
+										{v}</label
+									>
+								{/each}
+							</fieldset>
+							<fieldset>
+								<legend>Measure</legend>
+								{#each ['narrow', 'wide'] as const as v (v)}
+									<label
+										><input
+											type="radio"
+											name="yours-width"
+											checked={prefs.yours.width === v}
+											onchange={() => (prefs.yours = { ...prefs.yours, width: v })}
+										/>
+										{v}</label
+									>
+								{/each}
+							</fieldset>
+							<!-- Dropping a photo on the paper is the gesture; this is the same
+							     thing for anyone not holding a mouse. -->
+							<label class="prefs-row yours-photo">
+								<span>Photograph</span>
+								<input
+									type="file"
+									accept="image/*"
+									class="sr-only"
+									onchange={(e) => {
+										void takePhoto(e.currentTarget.files?.[0]);
+										e.currentTarget.value = '';
+									}}
+								/>
+								<span class="room-btn" aria-hidden="true">Choose…</span>
+							</label>
+							{#if prefs.yours.photo}
+								<label class="prefs-row">
+									<input
+										type="checkbox"
+										checked={prefs.yours.wash}
+										onchange={(e) => (prefs.yours = { ...prefs.yours, wash: e.currentTarget.checked })}
+									/>
+									Show it behind the words
+								</label>
+								<button
+									type="button"
+									class="room-link yours-forget"
+									onclick={() => (prefs.yours = { ...prefs.yours, photo: null, wash: false })}
+								>
+									Forget the photograph
+								</button>
+							{/if}
 						{/if}
 					</div>
 				</details>
@@ -513,6 +688,15 @@
 		color: var(--muted);
 		font-size: 0.7rem;
 	}
+	/* Reserve the longest message's width so the save state can't reflow the
+	   topbar. "Saving…" is 49px and "Saved in this browser" is 121px, and the
+	   difference was enough to push the room strip onto a second row and shove
+	   everything below it 33px down, mid-sentence, every time a save landed. A
+	   status that moves the furniture is worse than no status. */
+	.room-status:not(.tabular-nums) {
+		min-width: 8rem;
+		text-align: right;
+	}
 	.goal-met {
 		color: #4c7a45;
 	}
@@ -591,6 +775,7 @@
 		top: calc(100% + 0.35rem);
 		z-index: 30;
 		min-width: 13rem;
+		max-width: min(20rem, calc(100vw - 1.5rem));
 		border: 1px solid var(--line);
 		border-radius: 0.5rem;
 		background: var(--bg);
@@ -622,6 +807,70 @@
 	}
 	.prefs-row {
 		display: flex;
+	}
+	/* The Yours controls. Each door is painted in the room it opens onto, so the
+	   list IS the swatch and cannot misrepresent what it will give you — the old
+	   room's failure was picking "dusk" from a text dropdown and hoping. */
+	.yours-rooms {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 0.3rem;
+	}
+	.yours-door {
+		border: 1px solid;
+		border-radius: 0.3rem;
+		padding: 0.35rem 0.4rem;
+		font-size: 0.7rem;
+		text-align: left;
+		cursor: pointer;
+		transition: transform 100ms;
+	}
+	.yours-door:hover,
+	.yours-door:focus-visible {
+		transform: translateY(-1px);
+	}
+	.yours-swatches {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.3rem;
+	}
+	/* A pigment chip shows the ink it will actually make on the paper in play,
+	   not the hue's own colour — reaching for one is reaching for the result. */
+	.yours-chip {
+		width: 1.4rem;
+		height: 1.4rem;
+		border: 1px solid var(--line);
+		border-radius: 0.25rem;
+		cursor: pointer;
+		transition: transform 100ms;
+	}
+	.yours-chip:hover,
+	.yours-chip:focus-visible {
+		transform: scale(1.12);
+	}
+	.yours-chip[aria-pressed='true'] {
+		outline: 2px solid var(--fg);
+		outline-offset: 1px;
+	}
+	.yours-photo {
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.5rem;
+		cursor: pointer;
+	}
+	.yours-forget {
+		align-self: start;
+		font-size: 0.7rem;
+		color: var(--muted);
+	}
+	@media (pointer: coarse) {
+		.yours-chip {
+			width: 1.9rem;
+			height: 1.9rem;
+		}
+		.yours-door {
+			padding: 0.5rem;
+		}
 	}
 	.prefs-num {
 		width: 4.5rem;

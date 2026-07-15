@@ -217,29 +217,56 @@ export function derive(pixels: Uint8ClampedArray, target = AA): Room {
 	return { paper, ink: inkFor(paper, hue?.rgb ?? [0, 0, 0], target).rgb, clusters };
 }
 
+export interface Wash {
+	/** The ink for the room WITH this much photograph behind it. */
+	ink: RGB;
+	/** How much photograph the words can take. Derived; never chosen. */
+	opacity: number;
+}
+
 /**
- * How much photograph the room can take behind the words.
+ * The ink and the wash, solved together.
  *
- * The picture shows through, so contrast has to hold against the composite
- * rather than the flat paper — and a photograph is a luminance range, not a
- * colour. So opacity is derived here, never chosen: turn it up until no legible
- * ink exists and it stops there. That keeps "you cannot choose an unreadable
- * room" true of the one feature most likely to break it.
+ * The order matters and getting it wrong is silent. Solve the ink against the
+ * bare paper first and you get a correct ink with no margin — the solver returns
+ * the GENTLEST ink that passes, landing on 4.500:1 exactly — so the first drop of
+ * photograph eats the whole allowance and the wash caps near 1%. It looks like
+ * the guarantee protecting the writer. It's the ordering being wrong: a flat
+ * photograph of the paper's own colour should be allowed at full strength, and
+ * that arrangement gives it 0.011.
  *
- * Always solvable: as opacity approaches 0 the composite collapses to the paper,
- * where the ink is already known good. Rounds DOWN — `toFixed` rounds half-up,
- * toward the cliff, which is how a 4.495:1 ships claiming 4.5.
+ * So ask the question the other way round. For a given amount of photograph:
+ * does ANY legible ink exist against that composite? Then take the most
+ * photograph that still answers yes, and use the ink it answered with — which is
+ * free to be bolder than the gentle one, because it has a picture to beat rather
+ * than a flat page.
+ *
+ * Terminates with an answer every time: at zero opacity the composite is just
+ * the paper, where an ink always exists (see `inkFor`). Floors rather than
+ * rounds, because this bounds a guarantee.
  */
-export function maxImageOpacity(paper: RGB, ink: RGB, imgLo: RGB, imgHi: RGB, target = AA): number {
+export function washFor(paper: RGB, hue: RGB, imgLo: RGB, imgHi: RGB, target = AA): Wash {
 	const mix = (a: RGB, b: RGB, t: number) => a.map((v, i) => v * (1 - t) + b[i] * t) as RGB;
-	let lo = 0;
-	let hi = 1;
-	for (let i = 0; i < 20; i++) {
-		const a = (lo + hi) / 2;
+	const rangeAt = (a: number): [number, number] => {
 		const l1 = luminance(mix(paper, imgLo, a));
 		const l2 = luminance(mix(paper, imgHi, a));
-		if (worstContrast(ink, Math.min(l1, l2), Math.max(l1, l2)) >= target) lo = a;
-		else hi = a;
+		return [Math.min(l1, l2), Math.max(l1, l2)];
+	};
+	const solve = (a: number): RGB | null => {
+		const range = rangeAt(a);
+		const ink = inkFor(paper, hue, target, range);
+		return worstContrast(ink.rgb, range[0], range[1]) >= target ? ink.rgb : null;
+	};
+	let best = solve(0) ?? inkFor(paper, hue, target).rgb;
+	let lo = 0;
+	let hi = 1;
+	for (let i = 0; i < 18; i++) {
+		const a = (lo + hi) / 2;
+		const ink = solve(a);
+		if (ink) {
+			lo = a;
+			best = ink;
+		} else hi = a;
 	}
-	return Math.floor(lo * 1000) / 1000;
+	return { ink: best, opacity: Math.floor(lo * 1000) / 1000 };
 }
