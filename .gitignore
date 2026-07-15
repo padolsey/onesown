@@ -2,6 +2,8 @@ node_modules/
 .svelte-kit/
 build/
 .wrangler/
+# local agent context — private, never published
+.claude/
 .env
 .env.*
 !.env.example

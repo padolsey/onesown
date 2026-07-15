@@ -34,6 +34,11 @@ light/dark independent of the OS.
   markers to HTML and serialize their DOM back. Its invariant — serializer
   output must be a fixed point of the parser — is enforced by the unit tests
   and an E2E idempotence sweep over hostile drafts.
+- **Preferences** (`src/lib/prefs.svelte.ts`) — theme, typewriter scrolling,
+  word goal, room variants, and the Yours room's lighting — persist in their
+  own `localStorage` key; focus mode is deliberately ephemeral.
+- **Offline** (`src/service-worker.js`) — a strictly same-origin service
+  worker, cache keyed by the deployed commit, registered in production only.
 
 ## Develop
 
@@ -46,9 +51,12 @@ pnpm test:e2e   # real-Chromium E2E — needs `pnpm dev` running first
 ```
 
 The E2E suite (`tests/e2e.mjs`) drives a real Chromium via `playwright-core`:
-persistence, room switching, rich-text round-trips, menus, and the
-hostile-input idempotence sweep. It looks for a `chrome-headless-shell` under
-`~/.cache/ms-playwright`, or set `ONESOWN_E2E_CHROMIUM=/path/to/chromium`.
+persistence, room switching, rich-text round-trips, menus, focus/theme/variant
+preferences, the hostile-input idempotence sweep, and a privacy guard that
+fails on any cross-origin request. It looks for a `chrome-headless-shell`
+under `~/.cache/ms-playwright`, or set `ONESOWN_E2E_CHROMIUM=/path/to/chromium`.
+Run it against production (extra header/attestation/service-worker checks
+activate) with `ONESOWN_E2E_BASE=https://onesown.app pnpm test:e2e`.
 
 ## Deploy
 
@@ -84,8 +92,9 @@ boring: SvelteKit, Vite, Tailwind, TypeScript, wrangler, playwright-core.
 - `pnpm-workspace.yaml` sets `minimumReleaseAge: 4320` — package versions
   younger than 3 days are refused, so a compromised release has time to be
   caught and yanked before it can land here.
-- No dependency may run lifecycle/postinstall scripts
-  (`onlyBuiltDependencies: []`; pnpm ≥10 blocks them by default anyway).
+- No dependency may run lifecycle/postinstall scripts (`allowBuilds` in
+  `pnpm-workspace.yaml` lists every candidate as `false`; pnpm ≥10 blocks
+  them by default anyway).
 - The pnpm version itself is pinned via the `packageManager` field (corepack).
 
 ## License
