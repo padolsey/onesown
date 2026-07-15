@@ -172,7 +172,16 @@ const CORPUS = [
 	'para1\n\npara2',
 	'ends with newline\n',
 	'***both***',
-	'plain <b>not html</b> & ampersand'
+	'plain <b>not html</b> & ampersand',
+	// A backslash ending a formatted run: the escape and the closing marker land
+	// against each other, so the marker must not be read as escaped. These drifted
+	// further on every pass before the guard in domToMarkers' wrap (`**C:\\**` ->
+	// `**C:\**` -> `**C:**`, losing the bold and then the backslash).
+	'**C:\\\\**',
+	'*a\\\\*',
+	'<u>a\\\\</u>',
+	'**a\\\\\\\\**',
+	'plain\\ backslash'
 ];
 async function richTouch() {
 	await tab('Doc').click();
@@ -182,7 +191,16 @@ async function richTouch() {
 	await page.keyboard.press('Backspace');
 	await page.waitForTimeout(100);
 }
-const STABLE_EXACT = new Set(['a * b * c', 'para1\n\npara2', 'ends with newline\n']);
+const STABLE_EXACT = new Set([
+	'a * b * c',
+	'para1\n\npara2',
+	'ends with newline\n',
+	'**C:\\\\**',
+	'*a\\\\*',
+	'<u>a\\\\</u>',
+	'**a\\\\\\\\**',
+	'plain\\ backslash'
+]);
 for (const s of CORPUS) {
 	await tab('Term').click();
 	await textarea().fill(s);

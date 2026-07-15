@@ -173,6 +173,10 @@ function isFormat(n: Node | undefined): boolean {
  * where a text asterisk touches a formatted sibling's emitted markers. Plain
  * prose asterisks stay unescaped — the parser's flanking/demotion rules make
  * them a fixed point, so round trips stay stable without backslash noise.
+ *
+ * A backslash ending this text is left alone here: whether it needs escaping
+ * depends on what gets concatenated after it, which only the caller knows —
+ * see the dangling-escape guard in domToMarkers' `wrap`.
  */
 function escapeText(s: string, inFormat: boolean, prevFormat: boolean, nextFormat: boolean): string {
 	let t = s
@@ -234,7 +238,15 @@ export function domToMarkers(root: HTMLElement): string {
 		const trail = inner.length > lead.length ? (inner.match(/\n+$/)?.[0] ?? '') : '';
 		inner = inner.slice(lead.length, inner.length - trail.length);
 		if (inner === '') return lead + trail;
-		return lead + openM + inner + closeM + trail;
+		// A backslash left at the end of the run would escape the closing marker
+		// we're about to concatenate — `C:\` in bold would emit `**C:\**`, whose
+		// `**` then parses as an escaped asterisk, dissolving the bold and eating
+		// the backslash. Double it so it stays a literal. escapeText can't do this:
+		// it sees one text node and can't know a marker lands next, and hoisting
+		// the trailing newlines above can make a backslash abut the marker that
+		// didn't before — so it has to happen here, after the slice.
+		const dangling = (inner.match(/\\*$/)?.[0].length ?? 0) % 2 === 1;
+		return lead + openM + inner + (dangling ? '\\' : '') + closeM + trail;
 	};
 
 	return walk(root, true, false);
