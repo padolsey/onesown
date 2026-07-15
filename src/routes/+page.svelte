@@ -27,6 +27,29 @@
 
 	let isMac = $state(false);
 	let showAbout = $state(false);
+	let roomStrip = $state<HTMLDivElement | null>(null);
+
+	// Eight pills don't fit a phone, so the strip scrolls — and it always started
+	// at the left. The room is restored from the last session, so a writer who left
+	// off in Post or Yours came back to five unpressed pills and no selection
+	// anywhere: the app's own navigation showing nothing at all, every session.
+	//
+	// Both reads are load-bearing. `doc.shell` re-centres when the room changes;
+	// `roomStrip` re-runs this when the header remounts, which is the other way the
+	// scroll is lost — leaving focus mode rebuilds the strip at zero, so a writer
+	// who swiped to find Yours lost it again on every ⌘.
+	//
+	// Measured from rects rather than offsetLeft: the strip isn't a positioned
+	// ancestor, so offsetLeft answers a question about some element further up.
+	$effect(() => {
+		const strip = roomStrip;
+		const active = strip?.querySelector<HTMLElement>(`button[data-room="${doc.shell}"]`);
+		if (!strip || !active) return;
+		const stripBox = strip.getBoundingClientRect();
+		const activeBox = active.getBoundingClientRect();
+		strip.scrollLeft +=
+			activeBox.left - stripBox.left - (stripBox.width - activeBox.width) / 2;
+	});
 
 	// Mount/unmount only. Without untrack this reads the draft (load() checks it)
 	// and so re-runs on every keystroke — tearing down into doc.flush() each
@@ -190,6 +213,7 @@
 		<header class="room-top flex flex-wrap items-center gap-x-3 gap-y-1 px-3 pb-1.5 pt-2 sm:px-4">
 			<h1 class="room-wordmark">A Room of One’s Own</h1>
 			<div
+				bind:this={roomStrip}
 				class="order-3 -mx-1 flex w-full gap-1.5 overflow-x-auto px-1 pb-0.5 sm:order-none sm:w-auto sm:pb-0"
 				role="group"
 				aria-label="Rooms"
@@ -197,6 +221,7 @@
 				{#each shellList as s (s.id)}
 					<button
 						type="button"
+						data-room={s.id}
 						title={s.hint}
 						aria-pressed={doc.shell === s.id}
 						onclick={() => doc.switchShell(s.id)}
@@ -397,10 +422,11 @@
 			type="button"
 			class="focus-exit"
 			aria-label="Exit focus mode"
-			title="Exit focus mode (Esc)"
+			title="Exit focus mode"
 			onclick={() => void setFocus(false)}
 		>
-			esc
+			<span class="exit-key">esc</span>
+			<span class="exit-touch">Done</span>
 		</button>
 	{/if}
 </div>
@@ -661,26 +687,56 @@
 		}
 	}
 	/* Focus-mode exit affordance (touch has no Esc key) */
+	/*
+	 * The way out of focus mode, and on an iPhone the ONLY way out — there is no
+	 * Esc key and no Fullscreen API to leave.
+	 *
+	 * It used to fade itself to 0.4 to keep out of the way, which is the one thing
+	 * it must not do. Group opacity dilutes the text AND the background together,
+	 * and its background was --bg, the very colour of the page behind it: it faded
+	 * toward its own backdrop and measured 1.78:1 on a light OS, 2.9:1 on touch
+	 * where hover never arrives and 0.7 is therefore the resting state. Opacity was
+	 * the whole defect; the palette was never the problem.
+	 *
+	 * It also drew itself from the chrome palette while sitting on the room's
+	 * surface — it's a sibling of <main>, not a descendant of any room — so it
+	 * matched the paper only by luck, and landed as a dark blob on Bare's cream or
+	 * a pale lozenge on Term's near-black depending on the OS theme.
+	 *
+	 * Both go away with one move: its own scrim, dark and translucent, carrying its
+	 * own light text. The alpha lets the room show through so it still recedes,
+	 * while the label stays fully opaque and legible; and being independent of both
+	 * palettes, it reads the same on cream paper and on a terminal.
+	 */
 	.focus-exit {
 		position: fixed;
 		right: 0.6rem;
 		top: 0.6rem;
 		z-index: 40;
-		border: 1px solid var(--line);
+		border: 1px solid rgba(244, 241, 234, 0.35);
 		border-radius: 9999px;
-		background: var(--bg);
-		color: var(--muted);
+		background: rgba(20, 19, 18, 0.78);
+		color: #f4f1ea;
 		font-size: 0.65rem;
 		padding: 0.3rem 0.6rem;
-		opacity: 0.4;
-		transition: opacity 120ms;
+		transition: background 120ms;
 	}
 	.focus-exit:hover,
 	.focus-exit:focus-visible {
-		opacity: 1;
+		background: rgba(20, 19, 18, 0.95);
+	}
+	/* "esc" is a hint, and hints have to be true: there is no Esc key on a phone. */
+	.exit-touch {
+		display: none;
 	}
 	/* Comfortable touch targets; the ⌘S hint is meaningless on touch. */
 	@media (pointer: coarse) {
+		.exit-key {
+			display: none;
+		}
+		.exit-touch {
+			display: inline;
+		}
 		.room-tab {
 			padding: 0.5rem 0.9rem;
 		}
@@ -692,7 +748,6 @@
 			display: none;
 		}
 		.focus-exit {
-			opacity: 0.7;
 			padding: 0.5rem 0.8rem;
 		}
 	}

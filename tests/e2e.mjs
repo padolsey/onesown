@@ -62,13 +62,24 @@ const sameOrigin = (url) => {
 		return false;
 	}
 };
-ctx.on('request', (r) => {
-	const url = r.url();
-	if (/^https?:/.test(url) && !sameOrigin(url)) crossOrigin.push(url);
-});
-// WebSockets are not reported as requests by either listener, so they need their
-// own. Compare origins rather than prefixing BASE — the dev server's HMR socket
-// is same-origin on a different scheme and must not read as a leak.
+// Every context this run opens must be watched, or a later section that needs its
+// own — a phone viewport, say — becomes an unwatched hole in the one guard the
+// product's promise rests on.
+function watchOrigins(c) {
+	c.on('request', (r) => {
+		const url = r.url();
+		if (/^https?:/.test(url) && !sameOrigin(url)) crossOrigin.push(url);
+	});
+	// WebSockets are reported by neither request listener, so they need their own.
+	// Compare origins rather than prefixing BASE — the dev server's HMR socket is
+	// same-origin on a different scheme and must not read as a leak.
+	c.on('page', (p) =>
+		p.on('websocket', (ws) => {
+			if (!sameOrigin(ws.url().replace(/^ws/, 'http'))) crossOrigin.push(ws.url());
+		})
+	);
+}
+watchOrigins(ctx);
 page.on('websocket', (ws) => {
 	if (!sameOrigin(ws.url().replace(/^ws/, 'http'))) crossOrigin.push(ws.url());
 });
@@ -758,6 +769,39 @@ for (const c of SEMANTIC_CASES) {
 	}
 }
 
+// ── 18b. The room strip shows which room you are in ─────────────────────────
+//
+// Eight pills overflow a phone and the strip always started at the left, while
+// the room is restored from the last session — so a writer who left off in Post
+// or Yours came back to a strip of unpressed pills with the selected one
+// entirely offscreen. Measured before the fix: Yours 0% visible, Post 0%.
+const phone = await browser.newContext({ viewport: { width: 390, height: 760 }, hasTouch: true });
+watchOrigins(phone);
+await phone.addInitScript(() =>
+	localStorage.setItem('onesown:v1', JSON.stringify({ v: 1, text: 'a draft', shell: 'yours' }))
+);
+const phonePage = await phone.newPage();
+await phonePage.goto(BASE + '/', { waitUntil: 'networkidle' });
+await phonePage.waitForTimeout(400);
+const pillVisible = () =>
+	phonePage.evaluate(() => {
+		const strip = document.querySelector('[aria-label="Rooms"]');
+		const active = strip?.querySelector('[aria-pressed="true"]');
+		if (!active) return 0;
+		const s = strip.getBoundingClientRect();
+		const a = active.getBoundingClientRect();
+		return Math.round((Math.max(0, Math.min(a.right, s.right) - Math.max(a.left, s.left)) / a.width) * 100);
+	});
+check('the restored room is visible in the strip on a phone', (await pillVisible()) === 100, `${await pillVisible()}% of the active pill is on screen`);
+// Focus mode unmounts the header, so leaving it rebuilds the strip at zero —
+// the other way the scroll position was lost, on every ⌘.
+await phonePage.keyboard.press('Control+.');
+await phonePage.waitForTimeout(400);
+await phonePage.keyboard.press('Escape');
+await phonePage.waitForTimeout(500);
+check('the strip still shows the room after a focus round trip', (await pillVisible()) === 100, `${await pillVisible()}% of the active pill is on screen`);
+await phone.close();
+
 // ── 19. Shortcuts follow the keycap, not the US-QWERTY position ─────────────
 //
 // A real keyboard sends both: `key` is the letter the layout produced, `code` is
@@ -812,6 +856,61 @@ const beforeCyrillic = await textarea().inputValue();
 await pressLayout('я', 'KeyZ');
 await page.waitForTimeout(250);
 check('Cyrillic Ctrl+я still undoes', (await textarea().inputValue()) !== beforeCyrillic, `stayed at ${JSON.stringify(beforeCyrillic)}`);
+
+// ── 19b. Focus mode's only exit is legible on any room ──────────────────────
+//
+// On an iPhone this pill is the ONLY way out: there is no Esc key and no
+// Fullscreen API to leave. It used to fade itself to opacity 0.4 over a
+// background that was the page's own colour, so it dissolved into its backdrop —
+// 1.78:1 with a mouse, 2.9:1 on touch where hover never comes. Its label must be
+// legible, and it must not name a key the device does not have.
+for (const [room, scheme] of [['bare', 'light'], ['bare', 'dark'], ['term', 'light']]) {
+	const fc = await browser.newContext({ viewport: { width: 800, height: 600 }, colorScheme: scheme, hasTouch: true });
+	watchOrigins(fc);
+	await fc.addInitScript((r) => localStorage.setItem('onesown:v1', JSON.stringify({ v: 1, text: 'writing', shell: r })), room);
+	const fp = await fc.newPage();
+	await fp.goto(BASE + '/', { waitUntil: 'networkidle' });
+	await fp.keyboard.press('Control+.');
+	await fp.waitForTimeout(400);
+	const r = await fp.evaluate(() => {
+		const el = document.querySelector('.focus-exit');
+		if (!el) return null;
+		const cs = getComputedStyle(el);
+		const toRGB = (css) => {
+			const c = document.createElement('canvas').getContext('2d');
+			c.fillStyle = '#000';
+			c.fillStyle = css;
+			c.fillRect(0, 0, 1, 1);
+			const d = c.getImageData(0, 0, 1, 1).data;
+			return [d[0], d[1], d[2]];
+		};
+		const lum = ([a, b, c]) => {
+			const f = (v) => ((v /= 255) <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
+			return 0.2126 * f(a) + 0.7152 * f(b) + 0.0722 * f(c);
+		};
+		// Composite what the eye actually receives, in order: the pill's scrim over
+		// the room, the label over that, and then group opacity pulling BOTH back
+		// toward the room — which is precisely how this control disappeared. An
+		// alpha must be read as an alpha: rgb() has none, and mistaking its blue
+		// channel for one yields numbers like 1761766:1 and a false pass.
+		const alphaOf = (css) => {
+			const parts = /^rgba?\(([^)]+)\)/.exec(css)?.[1].split(/[\s,/]+/).filter(Boolean).map(Number) ?? [];
+			return parts.length >= 4 ? parts[3] : 1;
+		};
+		const over = (fg, bgc, a) => fg.map((v, i) => v * a + bgc[i] * (1 - a));
+		const room = toRGB(getComputedStyle(document.querySelector('main section') ?? document.body).backgroundColor);
+		const opacity = Number(cs.opacity);
+		const field = over(toRGB(cs.backgroundColor), room, alphaOf(cs.backgroundColor));
+		const label = over(toRGB(cs.color), field, alphaOf(cs.color));
+		const [hi, lo] = [lum(over(label, room, opacity)), lum(over(field, room, opacity))].sort((x, y) => y - x);
+		return { ratio: +((hi + 0.05) / (lo + 0.05)).toFixed(2), opacity, label: el.innerText.trim() };
+	});
+	check(`focus exit is legible on ${room} (${scheme} OS)`, r && r.ratio >= 4.5, r ? `label ${r.ratio}:1 against the pill it sits on` : 'no exit control at all');
+	// Opacity is what broke it before: it dilutes label and background together.
+	check(`focus exit does not fade itself on ${room} (${scheme} OS)`, r && r.opacity === 1, r ? `opacity ${r.opacity}` : 'missing');
+	check(`focus exit names no key a phone lacks on ${room} (${scheme} OS)`, r && !/esc/i.test(r.label), r ? `reads ${JSON.stringify(r.label)} on a touch device` : 'missing');
+	await fc.close();
+}
 
 // ── 20. Scenery says nothing it cannot do ───────────────────────────────────
 //
