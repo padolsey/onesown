@@ -5,9 +5,9 @@
 	"$schema": "node_modules/wrangler/config-schema.json",
 	"name": "onesown",
 	"compatibility_date": "2026-07-01",
-	// Canonical origin. workers.dev stays enabled until onesown.app is
-	// confirmed live everywhere — then add "workers_dev": false so there is
-	// exactly one origin to verify.
+	// Canonical (and only) origin: with routes configured, wrangler disables
+	// the workers.dev URL by default, so onesown.app is the single origin to
+	// verify. Set "workers_dev": true here if a preview origin is ever needed.
 	"routes": [{ "pattern": "onesown.app", "custom_domain": true }],
 	"assets": {
 		"directory": "./build"
