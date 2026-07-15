@@ -758,7 +758,62 @@ for (const c of SEMANTIC_CASES) {
 	}
 }
 
-// ── 19. Scenery says nothing it cannot do ───────────────────────────────────
+// ── 19. Shortcuts follow the keycap, not the US-QWERTY position ─────────────
+//
+// A real keyboard sends both: `key` is the letter the layout produced, `code` is
+// where that key sits on a US board. They only agree on QWERTY. Playwright's
+// keyboard can't decouple them — it drives a virtual US layout — so these
+// dispatch the pairs a real QWERTZ/Colemak/Dvorak/Cyrillic keyboard sends.
+// The room is persisted, so a reload lands wherever the last section left off —
+// Doc, which has no textarea. Ask for one.
+await page.goto(BASE + '/', { waitUntil: 'networkidle' });
+await tab('Bare').click();
+await page.waitForTimeout(200);
+const pressLayout = (key, code, opts = {}) =>
+	page.evaluate(
+		([k, c, o]) => {
+			const e = new KeyboardEvent('keydown', { key: k, code: c, ctrlKey: true, bubbles: true, cancelable: true, ...o });
+			(document.querySelector('textarea') ?? document.body).dispatchEvent(e);
+			return e.defaultPrevented;
+		},
+		[key, code, opts]
+	);
+
+await textarea().click();
+await page.keyboard.press('Control+a');
+await page.keyboard.press('Delete');
+await page.keyboard.type('first');
+await page.waitForTimeout(700);
+await page.keyboard.type(' second');
+await page.waitForTimeout(700);
+await page.keyboard.press('Control+z');
+await page.waitForTimeout(250);
+const undone = await textarea().inputValue();
+check('setup: undo left something to redo', undone === 'first', JSON.stringify(undone));
+// QWERTZ: Y and Z are swapped. Ctrl+Y arrives as key='y' on code='KeyZ', which
+// the old handler matched to the Z branch and undid — the opposite of the ask.
+await pressLayout('y', 'KeyZ');
+await page.waitForTimeout(250);
+check('QWERTZ Ctrl+Y redoes rather than undoing', (await textarea().inputValue()) === 'first second', JSON.stringify(await textarea().inputValue()));
+// Dvorak's F sits on QWERTY's Y. Browser find must survive.
+const stoleFind = await pressLayout('f', 'KeyY');
+check('Dvorak Ctrl+F is left to the browser', stoleFind === false, 'the app called preventDefault on the find shortcut');
+// Dvorak's R sits on QWERTY's O. Reload must survive.
+const stoleReload = await pressLayout('r', 'KeyO');
+check('Dvorak Ctrl+R is left to the browser', stoleReload === false, 'the app called preventDefault on the reload shortcut');
+// Colemak's J sits on QWERTY's Y. Chrome's downloads shortcut must survive.
+const stoleDownloads = await pressLayout('j', 'KeyY');
+check('Colemak Ctrl+J is left to the browser', stoleDownloads === false, 'the app called preventDefault on the downloads shortcut');
+// ...and the reason the position fallback exists at all: a Cyrillic layout gives
+// no Latin letter to read, so position is all there is.
+await page.keyboard.press('Control+z');
+await page.waitForTimeout(250);
+const beforeCyrillic = await textarea().inputValue();
+await pressLayout('я', 'KeyZ');
+await page.waitForTimeout(250);
+check('Cyrillic Ctrl+я still undoes', (await textarea().inputValue()) !== beforeCyrillic, `stayed at ${JSON.stringify(beforeCyrillic)}`);
+
+// ── 20. Scenery says nothing it cannot do ───────────────────────────────────
 //
 // The rooms are illusions, and the illusion is carried by shape: peripheral
 // vision resolves rhythm and contrast, not lexemes. A word in the scenery does

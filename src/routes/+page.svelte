@@ -89,15 +89,40 @@
 		if (!document.fullscreenElement && prefs.focus) prefs.focus = false;
 	}
 
+	/**
+	 * Which letter the writer actually pressed.
+	 *
+	 * `e.key` is what the layout produced — the letter on the keycap. `e.code` is
+	 * the physical US-QWERTY position, which on a permuted Latin layout is a
+	 * different letter entirely. Testing both with `||` was harmless when S was
+	 * the only shortcut and wrong the moment there were four: on QWERTZ, Ctrl+Y
+	 * arrives as key='y', code='KeyZ', matched the Z branch first, and undid. On
+	 * Colemak it opened the file picker. Dvorak's Ctrl+R couldn't reload the page
+	 * and Ctrl+F couldn't find, because both sit on QWERTY's O and Y.
+	 *
+	 * So believe the layout when it gave us a Latin letter, and fall back to
+	 * position only when it didn't — which is the case the fallback was added for:
+	 * Cyrillic Ctrl+я still has to undo. One letter, so the branches below are
+	 * disjoint by construction rather than by ordering.
+	 */
+	function pressedLetter(e: KeyboardEvent): string {
+		const key = e.key.toLowerCase();
+		if (/^[a-z]$/.test(key)) return key;
+		return /^Key([A-Z])$/.exec(e.code)?.[1].toLowerCase() ?? '';
+	}
+
 	function onKeydown(e: KeyboardEvent) {
 		const mod = e.metaKey || e.ctrlKey;
-		if (mod && !e.shiftKey && !e.altKey && (e.key.toLowerCase() === 's' || e.code === 'KeyS')) {
+		// Alt-combinations never reach the branches below, which is what keeps
+		// macOS Option-composed characters (⌥z is Ω) out of the Latin test.
+		const letter = pressedLetter(e);
+		if (mod && !e.shiftKey && !e.altKey && letter === 's') {
 			e.preventDefault();
 			if (e.repeat) return;
 			void doc.saveToDisk();
 			return;
 		}
-		if (mod && !e.shiftKey && !e.altKey && (e.key.toLowerCase() === 'o' || e.code === 'KeyO')) {
+		if (mod && !e.shiftKey && !e.altKey && letter === 'o') {
 			e.preventDefault();
 			if (e.repeat) return;
 			void doc.openFromDisk();
@@ -106,15 +131,15 @@
 		// We own undo: a textarea's native stack dies with the element on every
 		// room switch, but the draft crossing rooms is the whole point — so its
 		// history has to outlive the room that showed it.
-		if (mod && !e.altKey && (e.key.toLowerCase() === 'z' || e.code === 'KeyZ')) {
-			// Mail's To/Subject fields are ordinary inputs; leave them native.
+		if (mod && !e.altKey && letter === 'z') {
+			// The goal field is an ordinary number input; leave it native.
 			if (e.target instanceof HTMLInputElement) return;
 			e.preventDefault();
 			if (e.shiftKey) doc.redo();
 			else doc.undo();
 			return;
 		}
-		if (mod && !e.shiftKey && !e.altKey && (e.key.toLowerCase() === 'y' || e.code === 'KeyY')) {
+		if (mod && !e.shiftKey && !e.altKey && letter === 'y') {
 			if (e.target instanceof HTMLInputElement) return;
 			e.preventDefault();
 			doc.redo();
