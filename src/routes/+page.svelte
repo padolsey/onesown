@@ -42,16 +42,32 @@
 		return () => doc.flush();
 	});
 
+	// Reassurance only, and it earns its place in the topbar only where there's
+	// room. Anything the writer must actually act on goes to the notice below,
+	// which is visible at every width and in focus mode.
 	const statusText = $derived(
-		doc.diskNote ??
-			(doc.saveState === 'pending'
-				? 'Saving…'
-				: doc.saveState === 'saved'
-					? 'Saved in this browser'
-					: doc.saveState === 'error'
-						? 'Couldn’t autosave'
-						: 'Autosaves as you type')
+		doc.saveState === 'pending'
+			? 'Saving…'
+			: doc.saveState === 'saved'
+				? 'Saved in this browser'
+				: 'Autosaves as you type'
 	);
+
+	// The one surface for things that went wrong or just happened. Disk notes
+	// expire on their own; a conflict or a failed autosave persists, because the
+	// writer's words are at stake and a 3s toast is not an answer to that.
+	let dismissedNotice = $state<string | null>(null);
+	const noticeText = $derived(
+		doc.diskNote ??
+			(doc.conflict
+				? 'This draft changed in another tab. Not saving, so neither copy is lost.'
+				: doc.saveState === 'error'
+					? 'Couldn’t autosave — this draft is only in this tab.'
+					: null)
+	);
+	const notice = $derived(noticeText !== null && noticeText !== dismissedNotice ? noticeText : null);
+	// Disk notes retire themselves; the rest stay until dealt with.
+	const noticeSticky = $derived(notice !== null && doc.diskNote === null);
 
 	// Focus mode means the writing owns the screen, and the browser's own chrome
 	// is half of what's in the way. requestFullscreen needs a user gesture —
@@ -167,11 +183,6 @@
 			</div>
 			<div class="ml-auto flex items-center gap-x-2">
 				<span class="room-status hidden md:inline">{statusText}</span>
-				<span class="sr-only" aria-live="polite">
-					{doc.justCleared
-						? 'Draft cleared. Undo is available.'
-						: (doc.diskNote ?? (doc.saveState === 'error' ? 'Couldn’t autosave' : ''))}
-				</span>
 				<!-- Clear is the one destructive action, and touch has no ⌘Z — so the
 				     way back has to be visible, not just a shortcut. Expires on its own.
 				     Restores the cleared draft specifically, so it stays true to its
@@ -307,6 +318,33 @@
 	<main class="room-main flex-1 p-2 sm:p-3">
 		<ShellView />
 	</main>
+
+	<!-- Outside the focus-mode gate on purpose: a writer can sit in focus mode for
+	     a long stretch, and "your draft isn't saving" is exactly the thing they
+	     must not miss. Carries the live region too, for the same reason. -->
+	<span class="sr-only" aria-live="polite">
+		{doc.justCleared ? 'Draft cleared. Undo is available.' : (notice ?? '')}
+	</span>
+	{#if notice}
+		<div class="room-notice">
+			<span>{notice}</span>
+			{#if doc.conflict}
+				<button type="button" class="notice-action" onclick={() => doc.keepThisCopy()}>
+					Keep this one
+				</button>
+			{/if}
+			{#if noticeSticky}
+				<button
+					type="button"
+					class="notice-close"
+					aria-label="Dismiss notice"
+					onclick={() => (dismissedNotice = noticeText)}
+				>
+					×
+				</button>
+			{/if}
+		</div>
+	{/if}
 
 	{#if !prefs.focus}
 		<footer class="room-foot px-3 pb-1.5 sm:px-4">
@@ -548,6 +586,61 @@
 		background: transparent;
 		padding: 0.1rem 0.3rem;
 		margin-left: auto;
+	}
+	/* The notice. Chrome, but it draws nothing until there is something to say —
+	   so the writing surface still owns the viewport in the steady state.
+	   Painted as its own scrim rather than from the room's palette: it is a
+	   sibling of <main>, so it can land on Bare's cream or Term's near-black and
+	   must read on both. */
+	.room-notice {
+		position: fixed;
+		left: 50%;
+		bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+		transform: translateX(-50%);
+		z-index: 45;
+		display: flex;
+		align-items: center;
+		gap: 0.6rem;
+		max-width: min(30rem, calc(100vw - 1.6rem));
+		border-radius: 0.5rem;
+		background: rgba(20, 19, 18, 0.92);
+		color: #f4f1ea;
+		box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+		padding: 0.5rem 0.75rem;
+		font-size: 0.75rem;
+		line-height: 1.4;
+	}
+	.notice-action,
+	.notice-close {
+		flex-shrink: 0;
+		border-radius: 0.3rem;
+		color: inherit;
+		cursor: pointer;
+	}
+	.notice-action {
+		border: 1px solid rgba(244, 241, 234, 0.5);
+		padding: 0.15rem 0.45rem;
+		font-weight: 500;
+	}
+	.notice-action:hover {
+		border-color: #f4f1ea;
+	}
+	.notice-close {
+		padding: 0 0.25rem;
+		font-size: 0.95rem;
+		line-height: 1;
+	}
+	.notice-action:focus-visible,
+	.notice-close:focus-visible {
+		outline-color: #f4f1ea;
+	}
+	@media (pointer: coarse) {
+		.notice-action {
+			padding: 0.4rem 0.6rem;
+		}
+		.notice-close {
+			padding: 0.3rem 0.5rem;
+		}
 	}
 	/* Focus-mode exit affordance (touch has no Esc key) */
 	.focus-exit {

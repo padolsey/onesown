@@ -50,6 +50,8 @@ let selEnd = $state(0);
 let wantsFocus = $state(false);
 let saveState = $state<SaveState>('idle');
 let diskNote = $state<string | null>(null);
+/** Another tab holds a newer draft and this one has unsaved edits. See onStorage. */
+let conflict = $state(false);
 
 let loaded = false;
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
@@ -190,6 +192,10 @@ function persist() {
 	if (!browser) return;
 	if (saveTimer) clearTimeout(saveTimer);
 	saveTimer = null;
+	// Another tab wrote a draft this tab never saw, and this tab has edits of its
+	// own. There is no sensible merge of two plain strings, so refuse to write
+	// rather than silently flatten one of them — keepThisCopy() is the way out.
+	if (conflict) return;
 	try {
 		localStorage.setItem(
 			STORAGE_KEY,
@@ -199,6 +205,57 @@ function persist() {
 	} catch {
 		saveState = 'error';
 	}
+}
+
+/**
+ * Another tab wrote the shared draft.
+ *
+ * `persist()` blind-writes this tab's in-memory text, so before this a stale tab
+ * would flatten a newer draft on the next thing that scheduled a save — a room
+ * tab click was enough. Adopt when this tab has nothing pending (the writer just
+ * sees their words arrive); otherwise hold both copies and say so.
+ */
+function onStorage(e: StorageEvent) {
+	if (e.key !== STORAGE_KEY || e.newValue === null || conflict) return;
+	let d: Record<string, unknown>;
+	try {
+		d = JSON.parse(e.newValue) as Record<string, unknown>;
+	} catch {
+		return;
+	}
+	if (typeof d.text !== 'string') return;
+	if (saveTimer) {
+		// We have unsaved edits of our own — nothing here is safe to throw away.
+		conflict = true;
+		clearTimeout(saveTimer);
+		saveTimer = null;
+		return;
+	}
+	if (d.text === text) return;
+	// Assign the module state directly, never through the doc.* setters: those
+	// recordEdit() and scheduleSave(), which would pollute undo and echo this
+	// tab's adoption straight back out to the other one.
+	text = d.text;
+	if (typeof d.mailTo === 'string') mailTo = d.mailTo;
+	if (typeof d.mailSubject === 'string') mailSubject = d.mailSubject;
+	if (typeof d.mailCc === 'string') mailCc = d.mailCc;
+	if (typeof d.mailBcc === 'string') mailBcc = d.mailBcc;
+	selStart = Math.min(selStart, text.length);
+	selEnd = Math.min(selEnd, text.length);
+	// Our history describes a draft that no longer exists anywhere. Keeping it
+	// would let ⌘Z resurrect it *over* the other tab's work — applySnapshot
+	// persists — which is the very thing this listener exists to prevent.
+	past = [];
+	future = [];
+	lastEditAt = 0;
+	dismissCleared();
+	saveState = 'saved';
+}
+
+/** Resolve a conflict this tab's way: its text wins and saving resumes. */
+function keepThisCopy() {
+	conflict = false;
+	persist();
 }
 
 function load() {
@@ -221,6 +278,10 @@ function load() {
 	}
 	loaded = true;
 	if (text) saveState = 'saved';
+	// The draft is one string shared by every tab on this origin, and persist()
+	// does not re-read before writing — so a tab has to be told when the shared
+	// copy moves underneath it.
+	window.addEventListener('storage', onStorage);
 }
 
 function flush() {
@@ -471,6 +532,9 @@ export const doc = {
 	get diskNote() {
 		return diskNote;
 	},
+	get conflict() {
+		return conflict;
+	},
 	get words() {
 		const t = text.trim();
 		return t === '' ? 0 : t.split(/\s+/).length;
@@ -508,5 +572,6 @@ export const doc = {
 	undo,
 	redo,
 	restoreCleared,
+	keepThisCopy,
 	dismissCleared
 };

@@ -285,7 +285,8 @@ for (const shell of ['Bare', 'Scratch', 'Pad', 'Term', 'Mail', 'Doc', 'Post', 'Y
 	await page.waitForTimeout(250);
 	await page.screenshot({ path: path.join(SHOTS, `${shell.toLowerCase()}.png`) });
 }
-check('no page JS errors', pageErrors.length === 0, pageErrors.slice(0, 3).join(' | '));
+// (the pageErrors assertion lives with the terminal guards at the foot of this
+// file — it had drifted to here, leaving every later section unchecked)
 
 // ── 12. Verification surface ─────────────────────────────────────────────────
 check('footer links to /verify', (await page.locator('a[href="/verify"]').count()) === 1);
@@ -513,6 +514,70 @@ await page.waitForTimeout(400);
 await page.evaluate(() => document.exitFullscreen());
 await page.waitForTimeout(400);
 check('external fullscreen exit restores chrome', (await page.locator('header.room-top').count()) === 1);
+
+// ── 17. The draft is one string shared by every tab, and a stale tab must not win ──
+// A real setItem in a second page of this context fires a genuine cross-tab
+// 'storage' event — no debounce race to lose.
+const otherTab = await ctx.newPage();
+await otherTab.goto(BASE + '/', { waitUntil: 'networkidle' });
+const otherTabWrites = (t) =>
+	otherTab.evaluate((text) => {
+		localStorage.setItem(
+			'onesown:v1',
+			JSON.stringify({ v: 1, text, shell: 'bare', mailTo: '', mailSubject: '', mailCc: '', mailBcc: '', savedAt: Date.now() })
+		);
+	}, t);
+const storedText = () => page.evaluate(() => JSON.parse(localStorage.getItem('onesown:v1') ?? '{}').text ?? '');
+
+await page.goto(BASE + '/', { waitUntil: 'networkidle' });
+await textarea().click();
+await page.keyboard.press('Control+a');
+await page.keyboard.press('Delete');
+await page.waitForTimeout(800); // let our own save settle, so this tab is idle
+await otherTabWrites('written in the other tab');
+await page.waitForTimeout(400);
+check('an idle tab adopts a draft written elsewhere', (await textarea().inputValue()) === 'written in the other tab', JSON.stringify(await textarea().inputValue()));
+// The original bug: a single room-tab click in a stale tab scheduled a save that
+// flattened the newer draft. Switching rooms must not cost the other tab its words.
+await tab('Pad').click();
+await page.waitForTimeout(1200);
+check('switching rooms in a stale tab does not clobber the shared draft', (await storedText()) === 'written in the other tab', JSON.stringify(await storedText()));
+
+// A tab with unsaved edits has words worth keeping too — so hold both and say so.
+await tab('Bare').click();
+await page.waitForTimeout(400);
+await textarea().click();
+await page.keyboard.press('Control+a');
+await page.keyboard.press('Delete');
+await page.waitForTimeout(800);
+await page.keyboard.type('my unsaved local edits');
+await otherTabWrites('a whole chapter from the other tab'); // lands inside our 600ms debounce
+await page.waitForTimeout(1500);
+check('a tab with unsaved edits keeps its own text', (await textarea().inputValue()) === 'my unsaved local edits', JSON.stringify(await textarea().inputValue()));
+check('a conflicted tab refuses to overwrite the other copy', (await storedText()) === 'a whole chapter from the other tab', JSON.stringify(await storedText()));
+// The notice is the whole point of surfacing this: it must be reachable on a
+// phone, where the topbar status is display:none.
+await page.setViewportSize({ width: 390, height: 844 });
+await page.waitForTimeout(200);
+check('the conflict notice is visible on a phone', await page.locator('.room-notice').isVisible());
+check('the topbar status stays hidden on a phone', !(await page.locator('.room-status').first().isVisible()));
+// ...and in focus mode, where a writer can sit for a long stretch.
+await page.keyboard.press('Control+.');
+await page.waitForTimeout(400);
+check('the notice survives focus mode', await page.locator('.room-notice').isVisible());
+await page.keyboard.press('Escape');
+await page.waitForTimeout(400);
+await page.setViewportSize({ width: 1280, height: 900 });
+// Resolving is deliberate and by hand — never silent.
+await page.locator('.notice-action').click();
+await page.waitForTimeout(700);
+check('keeping this copy resumes saving', (await storedText()) === 'my unsaved local edits', JSON.stringify(await storedText()));
+check('resolving dismisses the notice', (await page.locator('.room-notice').count()) === 0);
+await otherTab.close();
+
+// Both terminal guards, together and last, so an appended section can't fall
+// outside them the way this one silently did.
+check('no page JS errors', pageErrors.length === 0, pageErrors.slice(0, 3).join(' | '));
 
 // Must be last: every request made during the entire run stays same-origin.
 check('no cross-origin requests', crossOrigin.length === 0, crossOrigin.slice(0, 3).join(' '));
