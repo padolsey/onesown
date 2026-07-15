@@ -816,10 +816,18 @@ async function caretPercentOfVisible({ layout, visible, offset = 0, atEnd = fals
 	}, atEnd);
 	await p.keyboard.type('xyz');
 	await p.waitForTimeout(400);
-	const r = await p.evaluate(async () => {
-		const { caretViewportTop } = await import('/src/lib/caret.ts');
+	// Locate the caret independently of the app: the draft is one short line per
+	// row, so nothing wraps and the caret's line is just the newline count. Using
+	// the app's own caret.ts would both measure the code under test with itself
+	// and only exist on the dev server, where /src/lib/*.ts is served — against a
+	// built deployment that import 404s.
+	const r = await p.evaluate(() => {
+		const ta = document.querySelector('textarea');
+		const lineHeight = parseFloat(getComputedStyle(ta).lineHeight);
+		if (!Number.isFinite(lineHeight)) throw new Error('line-height is not resolvable in px');
+		const line = ta.value.slice(0, ta.selectionEnd).split('\n').length - 1;
+		const caret = ta.getBoundingClientRect().top + line * lineHeight;
 		const view = window.visualViewport;
-		const caret = caretViewportTop(document.querySelector('textarea'));
 		const se = document.scrollingElement;
 		return {
 			pct: ((caret - view.offsetTop) / view.height) * 100,
