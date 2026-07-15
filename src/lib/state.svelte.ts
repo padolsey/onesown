@@ -85,6 +85,15 @@ let past = $state<Snapshot[]>([]);
 let future = $state<Snapshot[]>([]);
 let lastEditAt = 0;
 let justCleared = $state(false);
+/**
+ * What Clear wiped, held for the offer that follows it. The offer restores
+ * *this*, not `past.pop()`: clearing resets the coalescing clock, so the first
+ * keystroke after a clear pushes its own entry and a generic undo would peel
+ * that off instead — leaving the draft empty under a button that just promised
+ * otherwise. Held as the snapshot rather than an index into `past`, which
+ * trimHistory shifts out from under us.
+ */
+let clearedSnapshot: Snapshot | null = null;
 
 function snapshot(): Snapshot {
 	return { text, mailTo, mailSubject, mailCc, mailBcc, selStart, selEnd };
@@ -151,8 +160,23 @@ function noteCleared() {
 
 function dismissCleared() {
 	justCleared = false;
+	clearedSnapshot = null;
 	if (clearedTimer) clearTimeout(clearedTimer);
 	clearedTimer = null;
+}
+
+/**
+ * The way back from Clear — what the visible offer calls, and deliberately not
+ * `undo()`. Restoring is itself an ordinary edit, so it lands on the undo stack
+ * and can be walked back out of like any other.
+ */
+function restoreCleared() {
+	if (!clearedSnapshot) return false;
+	const restore = clearedSnapshot;
+	recordEdit(true);
+	applySnapshot(restore);
+	dismissCleared();
+	return true;
 }
 
 function scheduleSave() {
@@ -219,6 +243,7 @@ function switchShell(next: ShellId) {
 }
 
 function clearDraft() {
+	clearedSnapshot = snapshot();
 	recordEdit(true);
 	text = '';
 	mailTo = '';
@@ -482,5 +507,6 @@ export const doc = {
 	openFromDisk,
 	undo,
 	redo,
+	restoreCleared,
 	dismissCleared
 };

@@ -179,9 +179,13 @@
 						: (doc.diskNote ?? (doc.saveState === 'error' ? 'Couldn’t autosave' : ''))}
 				</span>
 				<!-- Clear is the one destructive action, and touch has no ⌘Z — so the
-				     way back has to be visible, not just a shortcut. Expires on its own. -->
+				     way back has to be visible, not just a shortcut. Expires on its own.
+				     Restores the cleared draft specifically, so it stays true to its
+				     label even if the writer has started typing again. -->
 				{#if doc.justCleared}
-					<button type="button" class="room-undo" onclick={() => doc.undo()}>Undo clear</button>
+					<button type="button" class="room-undo" onclick={() => doc.restoreCleared()}>
+						Undo clear
+					</button>
 				{/if}
 				{#if prefs.goal}
 					<span

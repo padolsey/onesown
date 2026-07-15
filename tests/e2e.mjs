@@ -370,6 +370,27 @@ await page.locator('button.room-undo').click();
 await page.waitForTimeout(300);
 check('undo clear restores the draft', (await textarea().inputValue()) === 'first thought and a second');
 
+// Clear focuses the editor, so typing straight after it is the designed path —
+// not an edge case. The offer must still mean what its label says: it restores
+// the cleared draft, and is not a synonym for "undo the last thing I did".
+page.once('dialog', (d) => d.accept());
+await page.getByRole('button', { name: 'Clear', exact: true }).click();
+await page.waitForTimeout(300);
+await page.keyboard.type('a false start');
+await page.waitForTimeout(300);
+check('undo clear survives typing after the clear', (await page.locator('button.room-undo').count()) === 1);
+await page.locator('button.room-undo').click();
+await page.waitForTimeout(300);
+check(
+	'undo clear restores the draft, not the typing',
+	(await textarea().inputValue()) === 'first thought and a second',
+	JSON.stringify(await textarea().inputValue())
+);
+// Restoring is an ordinary edit, so it can be walked back out of like any other.
+await page.keyboard.press('Control+z');
+await page.waitForTimeout(250);
+check('undo after restore steps back', (await textarea().inputValue()) === 'a false start', JSON.stringify(await textarea().inputValue()));
+
 // ── 15. Marker shortcuts: on where the room is a writing surface ────────────
 await textarea().click();
 await page.keyboard.press('Control+a');
