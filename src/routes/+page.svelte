@@ -388,7 +388,28 @@
 	{/if}
 </div>
 
+<!-- Somewhere to run off to. Typewriter mode holds the current line at the middle
+     of the screen, and the current line is the last one — but the page ends there,
+     so there was nothing left to scroll and the caret simply sat wherever it
+     landed: measured at 85% of the screen on desktop, 167% (behind the keyboard)
+     on a phone. The feature never worked in the one place writing happens.
+
+     A sibling of .room-app rather than padding inside it: the rooms hang off an
+     unbroken flex-1 chain from a min-h-dvh column, and anything that takes height
+     within that chain starves the room instead of extending the page. Out here it
+     only lengthens the document.
+
+     100vh because the room needed is (layout viewport - target), and the target
+     shrinks to nothing as a keyboard grows. Desktop only needs 55vh; the surplus
+     is empty scroll, which costs nothing but a little travel. -->
+{#if prefs.typewriter}
+	<div class="typewriter-runoff" aria-hidden="true"></div>
+{/if}
+
 <style>
+	.typewriter-runoff {
+		height: 100vh;
+	}
 	.room-app {
 		--bg: #f2efe9;
 		--fg: #2f2b25;
