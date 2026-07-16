@@ -45,6 +45,12 @@ let selStart = $state(0);
 let selEnd = $state(0);
 let wantsFocus = $state(false);
 let saveState = $state<SaveState>('idle');
+// False until load() runs, which is the first moment the saved draft is actually
+// in memory. The prerendered page ships editable, and the mount effect then
+// calls load() and writes the saved draft over whatever is there — so anything
+// typed in the gap between paint and hydration was silently clobbered. The
+// editors stay read-only until this flips.
+let ready = $state(false);
 let diskNote = $state<string | null>(null);
 /** Another tab holds a newer draft and this one has unsaved edits. See onStorage. */
 let conflict = $state(false);
@@ -320,6 +326,9 @@ function load() {
 		// corrupted draft — start fresh rather than crash
 	}
 	loaded = true;
+	// The saved draft is now in memory, so the editor is safe to accept input:
+	// a keystroke can no longer be overwritten by a load that hasn't happened yet.
+	ready = true;
 	if (text) saveState = 'saved';
 	// The draft is one string shared by every tab on this origin, and persist()
 	// does not re-read before writing — so a tab has to be told when the shared
@@ -545,6 +554,10 @@ export const doc = {
 	},
 	get saveState() {
 		return saveState;
+	},
+	/** True once the saved draft is loaded — the editor gates input on it. */
+	get ready() {
+		return ready;
 	},
 	get diskNote() {
 		return diskNote;

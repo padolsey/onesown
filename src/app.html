@@ -17,6 +17,18 @@
 		%sveltekit.head%
 	</head>
 	<body>
+		<!-- The whole app is JavaScript — the draft saves to local storage, the
+		     rooms switch, nothing renders without it. So the editor stays
+		     read-only until it loads, and a visitor with JS off should be told why
+		     the page looks inert rather than left to type into a box that keeps
+		     nothing. Plain markup, no styles to load, allowed by default-src. -->
+		<noscript>
+			<p style="margin: 1rem; font-family: Georgia, serif; color: #2f2b25">
+				A Room of One’s Own needs JavaScript: it keeps your writing in this browser and
+				never sends it anywhere, which is the whole point. With JavaScript off, the page
+				can’t save, so it stays read-only.
+			</p>
+		</noscript>
 		<div style="display: contents">%sveltekit.body%</div>
 	</body>
 </html>

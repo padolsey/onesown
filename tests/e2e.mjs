@@ -1302,6 +1302,35 @@ for (const room of ['Bare', 'Scratch', 'Pad', 'Term', 'Mail', 'Doc', 'Post', 'Yo
 	await fc.close();
 }
 
+// ── 18a. The editor rejects input until the saved draft is loaded ───────────
+//
+// The page is prerendered, so it paints an editable box before its JavaScript
+// runs — and hydration's load() then writes the saved draft over whatever is
+// there. A keystroke in that gap was silently clobbered. The editor is now
+// read-only until load() flips doc.ready; with the JS blocked entirely,
+// hydration never happens and it must stay read-only rather than accept text it
+// could never keep.
+{
+	const hc = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+	watchOrigins(hc);
+	await hc.addInitScript(() => localStorage.setItem('onesown:v1', JSON.stringify({ v: 1, text: 'SAVED', shell: 'bare' })));
+	// Block the app's JS so it can never hydrate; styles and markup still load.
+	await hc.route('**/_app/immutable/**/*.js', (r) => r.abort());
+	const hp = await hc.newPage();
+	await hp.goto(BASE + '/', { waitUntil: 'domcontentloaded' });
+	const ta = hp.locator('textarea').first();
+	check('the prerendered editor is read-only before hydration',
+		(await ta.getAttribute('readonly')) !== null);
+	await ta.click({ force: true }).catch(() => {});
+	await hp.keyboard.type('this must not stick');
+	check('typing before hydration cannot enter the draft',
+		!(await ta.inputValue()).includes('this must not stick'), JSON.stringify(await ta.inputValue()));
+	// And the false promise is gone: nothing claims it autosaves before it can.
+	check('the pre-hydration page does not claim to autosave',
+		!(await hp.locator('body').innerText()).includes('Autosaves as you type'));
+	await hc.close();
+}
+
 // ── 19c. A pending save survives the page going away ────────────────────────
 //
 // iOS Safari often fires neither beforeunload nor visibilitychange when a tab

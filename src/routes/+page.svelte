@@ -111,13 +111,15 @@
 	// whether their words are safe, and it was the one part of the screen still
 	// claiming they were.
 	const statusText = $derived(
-		doc.saveState === 'pending'
-			? 'Saving…'
-			: doc.saveState === 'saved'
-				? 'Saved in this browser'
-				: doc.saveState === 'error'
-					? 'Not saving'
-					: 'Autosaves as you type'
+		!doc.ready
+			? '' // before load: the prerendered page can't promise a save it can't yet make
+			: doc.saveState === 'pending'
+				? 'Saving…'
+				: doc.saveState === 'saved'
+					? 'Saved in this browser'
+					: doc.saveState === 'error'
+						? 'Not saving'
+						: 'Autosaves as you type'
 	);
 
 	// The one surface for things that went wrong or just happened. Disk notes

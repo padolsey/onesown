@@ -85,7 +85,7 @@
 <div
 	bind:this={el}
 	class="rich"
-	contenteditable="true"
+	contenteditable={doc.ready}
 	role="textbox"
 	tabindex="0"
 	aria-multiline="true"

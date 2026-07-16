@@ -125,6 +125,7 @@
 		spellcheck={false}
 		autocapitalize={autocap ? 'sentences' : 'off'}
 		dir="auto"
+		readonly={!doc.ready}
 		aria-label={label}
 		oninput={trackSelection}
 		onclick={trackSelection}
