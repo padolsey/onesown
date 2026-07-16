@@ -350,7 +350,19 @@ if (isDeployed) {
 		return false;
 	});
 	check('service worker registers', swRegistered);
+	// A wrong address used to answer zero bytes: a blank page, no way home, no
+	// sign the site was alive. Only Cloudflare can be asked this — the routing
+	// is its not_found_handling, not the app's — so it is checked where it runs.
+	const miss = await page.request.get(BASE + '/no-such-room-' + 'x'.repeat(8), { maxRedirects: 0 });
+	check('a wrong address 404s with a page, not zero bytes',
+		miss.status() === 404 && (await miss.text()).includes('No such room'),
+		`status ${miss.status()}, ${(await miss.body()).length} bytes`);
 }
+
+// The page itself is ours and ships in the build, so it is checked everywhere.
+await page.goto(BASE + '/404.html', { waitUntil: 'domcontentloaded' });
+check('the 404 page offers a way back', (await page.locator('a[href="/"]').count()) === 1);
+check('the 404 page names itself', (await page.locator('h1').textContent()).includes('No such room'));
 
 // ── 13. Preferences: focus mode, theme, variants, Yours room ────────────────
 await page.goto(BASE + '/', { waitUntil: 'networkidle' });

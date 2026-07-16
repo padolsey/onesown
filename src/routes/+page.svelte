@@ -287,7 +287,8 @@
 			<div class="ml-auto flex items-center gap-x-2">
 				<span class="room-status hidden md:inline-block">{statusText}</span>
 				<!-- Clear is the one destructive action, and touch has no ⌘Z — so the
-				     way back has to be visible, not just a shortcut. Expires on its own.
+				     way back has to be visible, not just a shortcut. It stays until it is
+				     taken or superseded; see noteCleared for why it no longer expires.
 				     Restores the cleared draft specifically, so it stays true to its
 				     label even if the writer has started typing again. -->
 				{#if doc.justCleared}
@@ -739,12 +740,23 @@
 		min-width: 8rem;
 		text-align: right;
 	}
+	/* The green has to change with the room — #4c7a45 is 4.74:1 on the light
+	   paper and 3.53:1 on the dark one — which is why this used to give up and
+	   inherit. But it gave up for nearly everyone: .room-app carries neither
+	   theme class until you override the theme, so :not(.theme-light) matched
+	   the default, and the one bit of colour the app has to give never appeared
+	   unless you had gone and picked a side. Each room gets a green that clears
+	   AA on it instead. The tick carries the news regardless. */
 	.goal-met {
 		color: #4c7a45;
 	}
-	.room-app.theme-dark .goal-met,
-	.room-app:not(.theme-light) .goal-met {
-		color: inherit;
+	@media (prefers-color-scheme: dark) {
+		.room-app:not(.theme-light) .goal-met {
+			color: #6aa05f;
+		}
+	}
+	.room-app.theme-dark .goal-met {
+		color: #6aa05f;
 	}
 	.room-btn {
 		display: inline-flex;

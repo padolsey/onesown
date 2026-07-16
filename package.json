@@ -2,13 +2,14 @@
 	"name": "onesown",
 	"version": "1.0.0",
 	"private": true,
-	"description": "A Room of One's Own — one draft, seven rooms. A notepad that swaps the app around your words.",
+	"description": "A Room of One's Own — one draft, eight rooms. A notepad that swaps the app around your words.",
 	"type": "module",
 	"scripts": {
 		"dev": "vite dev",
 		"build": "vite build && node scripts/emit-deployment-metadata.mjs",
 		"preview": "vite preview",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+		"test": "pnpm test:unit",
 		"test:unit": "node --experimental-strip-types --test tests/markers.test.ts tests/palette.test.ts",
 		"test:e2e": "node tests/e2e.mjs",
 		"deploy": "pnpm build && wrangler deploy"

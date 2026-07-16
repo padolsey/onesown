@@ -1,0 +1,91 @@
+<!doctype html>
+<!--
+  Served by Cloudflare for any address that isn't a real one (see
+  not_found_handling in wrangler.jsonc). Without it a wrong URL returns a
+  zero-byte 404: a blank white nothing, with no way home and no sign the site
+  is even alive.
+
+  Plain HTML on purpose. It cannot import the app's styles — it is not built by
+  Kit and has no hashed asset names to point at — and it should not want to: a
+  page whose whole job is to appear when something has already gone wrong is a
+  bad place to depend on anything. So it depends on nothing, which also means it
+  can carry the app's own promise honestly. default-src 'none' allows this page
+  no scripts, no fetches, no images, nothing to load and nowhere to send. That
+  is stricter than the app itself needs to be, and exactly right here.
+-->
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'" />
+		<meta name="robots" content="noindex" />
+		<title>No such room — A Room of One's Own</title>
+		<style>
+			:root {
+				color-scheme: light dark;
+				--paper: #faf8f4;
+				--ink: #2f2b25;
+				--soft: #6b6355;
+			}
+			@media (prefers-color-scheme: dark) {
+				:root {
+					--paper: #191817;
+					--ink: #e8e4da;
+					--soft: #9a9284;
+				}
+			}
+			html,
+			body {
+				height: 100%;
+			}
+			body {
+				margin: 0;
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				padding: 2rem;
+				background: var(--paper);
+				color: var(--ink);
+				font-family: Georgia, 'Iowan Old Style', 'Times New Roman', serif;
+				font-size: 17px;
+				line-height: 1.75;
+				text-wrap: pretty;
+			}
+			main {
+				max-width: 26rem;
+			}
+			h1 {
+				margin: 0 0 0.75rem;
+				font-size: 1.5rem;
+				font-weight: 400;
+				letter-spacing: 0.01em;
+			}
+			p {
+				margin: 0;
+				color: var(--soft);
+			}
+			a {
+				color: inherit;
+				text-decoration-color: color-mix(in srgb, currentColor 40%, transparent);
+				text-underline-offset: 0.2em;
+				border-radius: 2px;
+			}
+			a:hover {
+				text-decoration-color: currentColor;
+			}
+			a:focus-visible {
+				outline: 2px solid var(--ink);
+				outline-offset: 3px;
+			}
+		</style>
+	</head>
+	<body>
+		<main>
+			<h1>No such room</h1>
+			<p>
+				There is nothing written at this address. The door you want is
+				<a href="/">back this way</a>.
+			</p>
+		</main>
+	</body>
+</html>

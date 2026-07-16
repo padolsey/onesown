@@ -10,6 +10,11 @@
 	// verify. Set "workers_dev": true here if a preview origin is ever needed.
 	"routes": [{ "pattern": "onesown.app", "custom_domain": true }],
 	"assets": {
-		"directory": "./build"
+		"directory": "./build",
+		// Without this, a wrong URL gets a zero-byte 404 — a blank page with no
+		// way back and no sign the site is alive. Not "single-page-application":
+		// that answers 200 and hands the app to an address the app has no route
+		// for, which is a lie told to browsers, crawlers and caches alike.
+		"not_found_handling": "404-page"
 	}
 }

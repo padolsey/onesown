@@ -52,7 +52,6 @@ let conflict = $state(false);
 let loaded = false;
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
 let diskNoteTimer: ReturnType<typeof setTimeout> | null = null;
-let clearedTimer: ReturnType<typeof setTimeout> | null = null;
 let fileHandle: FileSystemFileHandle | null = null;
 
 /**
@@ -142,17 +141,24 @@ function redo() {
 	return true;
 }
 
+/**
+ * The offer stands until it is taken. It used to expire after twelve seconds,
+ * which is a stopwatch on the one move that undoes a destructive one: read the
+ * screen too slowly, or reach for a pointer too slowly, and the way back is
+ * simply gone, with nothing to show it was ever there. Twelve seconds is not a
+ * reading speed anyone should be held to, and the writers most likely to miss it
+ * are the ones least able to afford to (WCAG 2.2.1). Nothing is bought by the
+ * limit either: the offer costs one button and a copy of a draft that was on
+ * screen a moment ago. So it leaves when it is used, superseded, or refused —
+ * never on its own, and never while someone is still deciding.
+ */
 function noteCleared() {
 	justCleared = true;
-	if (clearedTimer) clearTimeout(clearedTimer);
-	clearedTimer = setTimeout(() => (justCleared = false), 12000);
 }
 
 function dismissCleared() {
 	justCleared = false;
 	clearedSnapshot = null;
-	if (clearedTimer) clearTimeout(clearedTimer);
-	clearedTimer = null;
 }
 
 /**
