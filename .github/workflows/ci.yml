@@ -45,3 +45,58 @@ jobs:
           pnpm build
           rm build/.well-known/deployment.json build-first/.well-known/deployment.json
           diff -r build-first build
+
+  # The suite that asserts the promise the product is sold on: that nothing you
+  # write leaves the page. Its last check watches every request made during the
+  # whole run and fails on any that isn't same-origin. That check only protects
+  # anyone if a machine runs it, so it runs here, on every pull request, rather
+  # than whenever a person remembers to.
+  browser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - run: corepack enable
+
+      - run: pnpm install --frozen-lockfile
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ms-playwright-${{ hashFiles('pnpm-lock.yaml') }}
+
+      # playwright-core drives a browser but ships none, and the postinstall that
+      # would fetch one is exactly what allowBuilds: false forbids. So fetch it
+      # here instead, as a test-time step: `pnpm exec` runs the locked
+      # playwright-core and cannot silently resolve some other version off the
+      # registry, and the browser it pulls is the one that version pins. CI drives
+      # the same build a contributor does. None of this reaches the artifact —
+      # the verify job builds that, in a job this one cannot touch.
+      - run: pnpm exec playwright-core install --only-shell --with-deps chromium
+
+      # Against the dev server, which is what the suite is written for: the
+      # prod-only checks (headers, CSP meta, service worker) need Cloudflare
+      # serving real _headers, so they skip here and are run against the live
+      # site after a deploy. --strictPort so a busy port fails now, loudly,
+      # instead of leaving the suite waiting on a page that is somewhere else.
+      - name: e2e
+        run: |
+          pnpm dev --port 5173 --strictPort > /tmp/dev.log 2>&1 &
+          for _ in $(seq 1 60); do
+            curl -sf http://localhost:5173/ > /dev/null && break
+            sleep 1
+          done
+          curl -sf http://localhost:5173/ > /dev/null || {
+            echo '--- the dev server never came up ---'; cat /tmp/dev.log; exit 1;
+          }
+          pnpm test:e2e
+
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-screenshots
+          path: /tmp/onesown-e2e-shots
