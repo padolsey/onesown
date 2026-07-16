@@ -309,7 +309,8 @@
 				     three radios; not once it holds the room you are trying to look at.
 				     The window handler asks where the click landed rather than having the
 				     panel stop it, so nothing in here needs a handler that isn't a real
-				     interaction. -->
+				     interaction.
+
 				     prefsOpen is the ONLY authority on whether this is open, which is why
 				     the summary cancels its own default. Left to itself the element is a
 				     second writer for the same bit, and the toggle event that would

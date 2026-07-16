@@ -104,6 +104,17 @@ check('bare active by default', (await tab('Bare').getAttribute('aria-pressed'))
 check('no focus steal on load', await page.evaluate(() => document.activeElement?.tagName !== 'TEXTAREA'));
 check('app-name meta', await page.evaluate(() =>
 	(document.querySelector('meta[name="application-name"]')?.getAttribute('content') ?? '').includes('Room of One')));
+// A comment that isn't one. These files carry long explanatory comments beside
+// the markup, and appending a paragraph to an existing block put it after the
+// `-->` that closed it — so several sentences about `prefsOpen` rendered into
+// the topbar, shipped, and passed every check here, because nothing was looking
+// at what the chrome SAYS. This is not a spelling test: `-->` and `<!--` in
+// rendered text mean markup has escaped, wherever it happens.
+const strayMarkup = (s) => s.includes('-->') || s.includes('<!--');
+check('no markup leaks into the page', !strayMarkup(await page.locator('body').innerText()),
+	((await page.locator('body').innerText()).match(/.{0,60}(-->|<!--).{0,60}/s) ?? [''])[0]);
+check('the topbar says only what it means to',
+	!strayMarkup(await page.locator('header.room-top').innerText()));
 
 // ── 2. Persistence + shell switching ─────────────────────────────────────────
 const TEXT = 'Dear reader,\n\nThe room changes the writing. Five words prove nothing, but here we are.';
