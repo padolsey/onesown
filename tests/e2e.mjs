@@ -230,7 +230,12 @@ const CORPUS = [
 	'*a\\\\*',
 	'<u>a\\\\</u>',
 	'**a\\\\\\\\**',
-	'plain\\ backslash'
+	'plain\\ backslash',
+	// A deliberate non-breaking space (written as an escape, never a literal, so
+	// the source stays greppable). escapeText used to rewrite every NBSP to a
+	// plain space on the way out of Doc/Mail — a silent edit to the writer's
+	// text. It must survive verbatim now, and be a fixed point of the codec.
+	'keep\u00a0this\u00a0space'
 ];
 async function richTouch() {
 	await tab('Doc').click();
@@ -248,7 +253,8 @@ const STABLE_EXACT = new Set([
 	'*a\\\\*',
 	'<u>a\\\\</u>',
 	'**a\\\\\\\\**',
-	'plain\\ backslash'
+	'plain\\ backslash',
+	'keep\u00a0this\u00a0space'
 ]);
 for (const s of CORPUS) {
 	await tab('Term').click();
@@ -1271,6 +1277,24 @@ for (const room of ['Bare', 'Scratch', 'Pad', 'Term', 'Mail', 'Doc', 'Post', 'Yo
 	check('the status line recovers', ((await fp.locator('.room-status').textContent()) ?? '').includes('Saved'));
 	await fc.close();
 }
+
+// ── 19c. A pending save survives the page going away ────────────────────────
+//
+// iOS Safari often fires neither beforeunload nor visibilitychange when a tab
+// is closed or evicted — but it does fire pagehide. Without a handler there, a
+// draft typed in the last 600ms (the debounce window) is lost. flush() no-ops
+// unless a save is pending, so this is purely a safety net.
+await page.goto(BASE + '/', { waitUntil: 'networkidle' });
+await tab('Bare').click();
+await page.evaluate(() => localStorage.removeItem('onesown:v1'));
+await textarea().fill('unsaved when the tab goes');
+// Assert the save really is still pending, or the test proves nothing.
+check('the draft is not yet persisted (save is pending)',
+	(await page.evaluate(() => localStorage.getItem('onesown:v1'))) === null);
+await page.evaluate(() => window.dispatchEvent(new Event('pagehide')));
+await page.waitForTimeout(100);
+const flushed = await page.evaluate(() => JSON.parse(localStorage.getItem('onesown:v1') ?? '{}').text);
+check('pagehide flushes the pending draft', flushed === 'unsaved when the tab goes', JSON.stringify(flushed));
 
 // ── 20a. No room invites the browser to spell-check ─────────────────────────
 //

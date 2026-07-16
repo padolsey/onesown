@@ -180,7 +180,6 @@ function isFormat(n: Node | undefined): boolean {
  */
 function escapeText(s: string, inFormat: boolean, prevFormat: boolean, nextFormat: boolean): string {
 	let t = s
-		.replace(/\u00a0/g, ' ')
 		.replace(/\\(?=[*\\<])/g, '\\\\')
 		.replace(/<(?=\/?u>)/g, '\\<');
 	if (inFormat) {

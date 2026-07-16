@@ -282,7 +282,12 @@
 		if (!(e.target instanceof Element) || !e.target.closest('.room-prefs')) prefsOpen = false;
 	}}
 	onbeforeunload={() => doc.flush()}
+	onpagehide={() => doc.flush()}
 />
+<!-- Two flush triggers, because no single one fires everywhere: iOS Safari
+     often skips beforeunload and visibilitychange when a tab is closed or
+     evicted, but does fire pagehide. flush() no-ops when no save is pending, so
+     firing more than once costs nothing. -->
 <svelte:document onvisibilitychange={onVisibilityChange} onfullscreenchange={onFullscreenChange} />
 
 <div
