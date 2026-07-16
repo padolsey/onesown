@@ -10,7 +10,7 @@
 		"preview": "vite preview",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"test": "pnpm test:unit",
-		"test:unit": "node --experimental-strip-types --test tests/markers.test.ts tests/palette.test.ts tests/headers.test.mjs",
+		"test:unit": "node --experimental-strip-types --test tests/markers.test.ts tests/palette.test.ts tests/headers.test.mjs tests/verify-dirty.test.mjs",
 		"test:e2e": "node tests/e2e.mjs",
 		"deploy": "pnpm build && wrangler deploy"
 	},
@@ -19,7 +19,7 @@
 		"@sveltejs/kit": "2.69.2",
 		"@sveltejs/vite-plugin-svelte": "7.2.0",
 		"@tailwindcss/vite": "4.3.2",
-		"@types/node": "^22.20.1",
+		"@types/node": "22.20.1",
 		"playwright-core": "1.61.1",
 		"svelte": "5.56.4",
 		"svelte-check": "4.7.2",

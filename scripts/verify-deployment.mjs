@@ -133,6 +133,15 @@ if (!attested) {
 	console.log('  MISSING  .well-known/deployment.json');
 } else {
 	console.log(`\nServer attests commit ${attested.commit} (${attested.builder}, built ${attested.builtAt})`);
+	// The build script sets this when it built from a tree with uncommitted
+	// changes (the field is absent, never false, when clean). Such a deployment
+	// is by construction not reproducible from any published commit, so it must
+	// not reach VERIFIED — the one word this whole script exists to earn. It was
+	// emitted and read by nobody until here.
+	if (attested.dirty) {
+		failures.push('attestation reports a dirty build tree');
+		console.log('  DIRTY    attestation has dirty:true — the deployed bytes reproduce from no commit');
+	}
 	const versionJson = JSON.parse(readFileSync(join(ROOT, '_app', 'version.json'), 'utf8'));
 	if (attested.commit !== versionJson.version) {
 		failures.push('attestation/version.json disagreement');
