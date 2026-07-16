@@ -57,10 +57,15 @@ node scripts/verify-deployment.mjs https://onesown.app
 
 The script hashes every file your build produced and compares it byte-for-byte
 against what the server returns, then cross-checks the served attestation
-against `/_app/version.json`. Two files are excluded from the byte comparison,
-by design: `deployment.json` itself (it contains the build timestamp; its
-`commit` field is cross-checked instead) and `_headers` (parsed by Cloudflare,
-never served).
+against `/_app/version.json`. Two files cannot be hashed that way, so each is
+checked another way instead: `deployment.json` carries the build timestamp, so
+its `commit` field is compared rather than its bytes; and `_headers` is parsed
+by Cloudflare at the edge and never served, so the headers it asks for are
+held against the live responses. That second one matters more than it looks —
+the service worker is the one context a page's CSP cannot reach, and `_headers`
+is where it is given a policy of its own. Serving the published bytes with that
+header quietly dropped would otherwise have been the one tamper verification
+could not see.
 
 If it prints `VERIFIED`, the site you are being served **is** the public
 source at that commit — this is the one guarantee that requires trusting
@@ -134,9 +139,9 @@ is instructed to refuse any it might try to make.
 
 - Production deploys **only** via Cloudflare Workers Builds from `main`. This
   is policy, not a technical impossibility — the account owner could run
-  `wrangler deploy` manually. A manual deploy of unpublished code would be
-  detectable by the verification procedure above (and by CI's reproducibility
-  check against the attested commit).
+  `wrangler deploy` manually. Unpublished code would not reproduce from any
+  published commit, so the verification procedure above would expose it — but
+  only when someone runs it. CI never contacts the live site.
 - Cloudflare zone settings that rewrite responses (Rocket Loader, email
   obfuscation, Cloudflare Web Analytics/RUM injection) must stay **off** —
   any of them would break byte-for-byte verification, which is exactly how
@@ -152,7 +157,13 @@ is instructed to refuse any it might try to make.
 `.github/workflows/ci.yml` runs on every push and pull request:
 `pnpm install --frozen-lockfile`, type-checking, unit tests, a production
 build, a schema check on the generated `deployment.json`, and a double-build
-byte-for-byte reproducibility check.
+byte-for-byte reproducibility check. A second job runs the browser suite,
+including the check that fails if the page makes a single cross-origin request.
+
+Neither job contacts the live site, so none of it verifies a deployment. The
+browser suite runs against a dev server; its checks on the served headers, the
+CSP meta tag and the service worker only run when it is pointed at the real
+one, which is part of the procedure above — the part a person runs.
 
 Dependency hygiene is described in the README: exact pins, committed lockfile,
 pnpm `minimumReleaseAge` of 3 days, and no dependency lifecycle scripts.
