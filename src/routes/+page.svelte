@@ -303,14 +303,27 @@
 			<div class="ml-auto flex items-center gap-x-2">
 				<span class="room-status hidden md:inline-block">{statusText}</span>
 				<!-- Clear is the one destructive action, and touch has no ⌘Z — so the
-				     way back has to be visible, not just a shortcut. It stays until it is
-				     taken or superseded; see noteCleared for why it no longer expires.
-				     Restores the cleared draft specifically, so it stays true to its
-				     label even if the writer has started typing again. -->
+				     way back has to be visible, not just a shortcut. Restores the cleared
+				     draft specifically, so it stays true to its label even if the writer
+				     has started typing again.
+
+				     It no longer expires and now survives a reload, which is what the
+				     confirm has always promised — so it needs a way to be turned down.
+				     Without one it is not an offer, it is a fixture: the only exits left
+				     would be taking it or clearing again. -->
 				{#if doc.justCleared}
-					<button type="button" class="room-undo" onclick={() => doc.restoreCleared()}>
-						Undo clear
-					</button>
+					<span class="room-undo-pair">
+						<button type="button" class="room-undo" onclick={() => doc.restoreCleared()}>
+							Undo clear
+						</button>
+						<button
+							type="button"
+							class="room-undo-refuse"
+							aria-label="Forget the cleared draft"
+							title="Forget the cleared draft"
+							onclick={() => doc.refuseCleared()}>×</button
+						>
+					</span>
 				{/if}
 				{#if prefs.goal}
 					<span
@@ -600,7 +613,12 @@
 	     a long stretch, and "your draft isn't saving" is exactly the thing they
 	     must not miss. Carries the live region too, for the same reason. -->
 	<span class="sr-only" aria-live="polite">
-		{doc.justCleared ? 'Draft cleared. Undo is available.' : (notice ?? '')}
+		<!-- The notice wins. It used to lose, which mattered little while the offer
+		     lasted twelve seconds and nothing while it lasted none — but the offer
+		     now outlives a reload, so a standing offer would have muted every
+		     announcement of a failed autosave for as long as it stood. The offer is
+		     good news; the notice is the writer's words at stake. -->
+		{notice ?? (doc.justCleared ? 'Draft cleared. Undo is available.' : '')}
 	</span>
 	{#if notice}
 		<div class="room-notice">
@@ -799,6 +817,11 @@
 	}
 	/* Transient way back from Clear. Reads as an offer, not chrome — it leaves
 	   again on its own once the moment of regret has passed. */
+	.room-undo-pair {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.15rem;
+	}
 	.room-undo {
 		display: inline-flex;
 		align-items: center;
@@ -809,6 +832,27 @@
 		font-weight: 500;
 		color: var(--undo);
 		cursor: pointer;
+	}
+	/* Quieter than the offer beside it: turning it down should be available, not
+	   advertised — the button that keeps the words is the one worth reaching for. */
+	.room-undo-refuse {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		border-radius: 0.3rem;
+		padding: 0.25rem 0.3rem;
+		font-size: 0.8rem;
+		line-height: 1;
+		color: var(--muted);
+		cursor: pointer;
+	}
+	.room-undo-refuse:hover {
+		color: var(--undo);
+	}
+	@media (pointer: coarse) {
+		.room-undo-refuse {
+			padding: 0.4rem 0.5rem;
+		}
 	}
 	.room-note {
 		color: var(--muted);

@@ -636,6 +636,43 @@ await page.keyboard.press('Control+z');
 await page.waitForTimeout(250);
 check('undo after restore steps back', (await textarea().inputValue()) === 'a false start', JSON.stringify(await textarea().inputValue()));
 
+// ── 14a. The offer survives the tab closing ─────────────────────────────────
+//
+// The confirm says "you can undo". It was true until you shut the laptop: the
+// offer lived in module state and the cleared words were nowhere on disk, so
+// the most ordinary way to walk away from a mistake was the one path where the
+// promise quietly stopped holding.
+await textarea().fill('words worth not losing');
+await page.waitForTimeout(900);
+page.once('dialog', (d) => d.accept());
+await page.getByRole('button', { name: 'Clear', exact: true }).click();
+await page.waitForTimeout(400);
+const persistedOffer = await page.evaluate(() => JSON.parse(localStorage.getItem('onesown:v1') ?? '{}').cleared?.text);
+check('the cleared draft reaches disk', persistedOffer === 'words worth not losing', JSON.stringify(persistedOffer));
+await page.reload({ waitUntil: 'networkidle' });
+check('the offer is still there after a reload', (await page.locator('button.room-undo').count()) === 1);
+await page.locator('button.room-undo').click();
+await page.waitForTimeout(300);
+check('and it still returns the words', (await textarea().inputValue()) === 'words worth not losing');
+// Taken, it must not come back to undo a clear that has already been undone.
+await page.waitForTimeout(700);
+await page.reload({ waitUntil: 'networkidle' });
+check('a taken offer does not return', (await page.locator('button.room-undo').count()) === 0);
+check('the draft is the restored one', (await textarea().inputValue()) === 'words worth not losing');
+
+// An offer that outlives a reload has to be refusable, or it is a fixture.
+page.once('dialog', (d) => d.accept());
+await page.getByRole('button', { name: 'Clear', exact: true }).click();
+await page.waitForTimeout(400);
+check('refusing is offered', (await page.locator('[aria-label="Forget the cleared draft"]').count()) === 1);
+await page.locator('[aria-label="Forget the cleared draft"]').click();
+await page.waitForTimeout(400);
+check('refusing retires the offer', (await page.locator('button.room-undo').count()) === 0);
+const refused = await page.evaluate(() => JSON.parse(localStorage.getItem('onesown:v1') ?? '{}').cleared);
+check('refusing is remembered, not just hidden', refused === undefined, JSON.stringify(refused));
+await page.reload({ waitUntil: 'networkidle' });
+check('a refused offer stays refused', (await page.locator('button.room-undo').count()) === 0);
+
 // ── 15. Marker shortcuts: on where the room is a writing surface ────────────
 await textarea().click();
 await page.keyboard.press('Control+a');

@@ -87,6 +87,30 @@ let justCleared = $state(false);
  * trimHistory shifts out from under us.
  */
 let clearedSnapshot: Snapshot | null = null;
+/**
+ * Whether the offer still fits beside the draft. Latched false the first time
+ * writing both overflows, so a doomed double write is attempted once and not
+ * on every keystroke thereafter. The draft is what must fit; the offer is a
+ * courtesy, and a courtesy that costs someone their draft is not one.
+ */
+let clearedFits = true;
+
+/**
+ * The offer as read back off disk, or null if there isn't a usable one.
+ *
+ * Empty text returns null so an offer that offers nothing can never reach the
+ * screen, and the selection is clamped to the text it belongs to: this is
+ * data that has been outside the program, and it comes back as whatever is in
+ * the key by the time we read it.
+ */
+function readCleared(v: unknown): Snapshot | null {
+	if (!v || typeof v !== 'object') return null;
+	const c = v as Record<string, unknown>;
+	if (typeof c.text !== 'string' || c.text === '') return null;
+	const n = c.text.length;
+	const at = (x: unknown) => (typeof x === 'number' && Number.isFinite(x) && x >= 0 && x <= n ? x : n);
+	return { text: c.text, selStart: at(c.selStart), selEnd: at(c.selEnd) };
+}
 
 function snapshot(): Snapshot {
 	return { text, selStart, selEnd };
@@ -129,8 +153,12 @@ function recordEdit(discrete = false) {
 function undo() {
 	if (past.length === 0) return false;
 	future.push(snapshot());
-	applySnapshot(past.pop()!);
+	// Retire the offer BEFORE applying: applySnapshot persists, so dismissing
+	// afterwards would write the record with the offer still in it and drop it
+	// from memory only — the offer would come back on the next reload, to undo
+	// a clear that has already been undone.
 	dismissCleared();
+	applySnapshot(past.pop()!);
 	return true;
 }
 
@@ -142,23 +170,14 @@ function redo() {
 }
 
 /**
- * The offer stands until it is taken. It used to expire after twelve seconds,
- * which is a stopwatch on the one move that undoes a destructive one: read the
- * screen too slowly, or reach for a pointer too slowly, and the way back is
- * simply gone, with nothing to show it was ever there. Twelve seconds is not a
- * reading speed anyone should be held to, and the writers most likely to miss it
- * are the ones least able to afford to (WCAG 2.2.1). Nothing is bought by the
- * limit either: the offer costs one button and a copy of a draft that was on
- * screen a moment ago. So it leaves when it is used, superseded, or refused —
- * never on its own, and never while someone is still deciding.
+ * Drop the offer in memory. Deliberately does NOT persist: onStorage uses it
+ * while adopting another tab's draft and must not echo a write back. Anything
+ * that is a decision by the writer goes through refuseCleared().
  */
-function noteCleared() {
-	justCleared = true;
-}
-
 function dismissCleared() {
 	justCleared = false;
 	clearedSnapshot = null;
+	clearedFits = true;
 }
 
 /**
@@ -168,11 +187,24 @@ function dismissCleared() {
  */
 function restoreCleared() {
 	if (!clearedSnapshot) return false;
+	// Held by value, so retiring the offer first is safe — and it must be first:
+	// applySnapshot persists, and dismissing after it would leave the offer on
+	// disk to be found again next session. See undo().
 	const restore = clearedSnapshot;
 	recordEdit(true);
-	applySnapshot(restore);
 	dismissCleared();
+	applySnapshot(restore);
 	return true;
+}
+
+/**
+ * The writer says no thanks. Separate from dismissCleared because that one is
+ * also how an adopting tab drops an offer it is about to re-read, and must not
+ * write; this one is a decision, and decisions are worth remembering.
+ */
+function refuseCleared() {
+	dismissCleared();
+	if (browser && loaded) persist();
 }
 
 function scheduleSave() {
@@ -190,11 +222,22 @@ function persist() {
 	// own. There is no sensible merge of two plain strings, so refuse to write
 	// rather than silently flatten one of them — keepThisCopy() is the way out.
 	if (conflict) return;
+	const base = { v: 1, text, shell, savedAt: Date.now() };
+	// The offer rides along in the draft's own record, and is the first thing
+	// dropped if the two together will not fit. It is additive, so `v` stays 1:
+	// an older build ignores the field, and this one reading an older record
+	// finds undefined. Nothing to migrate.
+	if (justCleared && clearedSnapshot && clearedFits) {
+		try {
+			localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...base, cleared: clearedSnapshot }));
+			saveState = 'saved';
+			return;
+		} catch {
+			clearedFits = false;
+		}
+	}
 	try {
-		localStorage.setItem(
-			STORAGE_KEY,
-			JSON.stringify({ v: 1, text, shell, savedAt: Date.now() })
-		);
+		localStorage.setItem(STORAGE_KEY, JSON.stringify(base));
 		saveState = 'saved';
 	} catch {
 		saveState = 'error';
@@ -238,7 +281,14 @@ function onStorage(e: StorageEvent) {
 	past = [];
 	future = [];
 	lastEditAt = 0;
-	dismissCleared();
+	// Adopt the offer that came with the draft rather than dropping it. persist()
+	// blind-writes this whole record, so a tab that adopted without it would
+	// delete the other tab's way back on its very next save — from a listener
+	// whose entire purpose is not losing anyone's words. Adopting also means the
+	// tab watching another tab clear is offered the same way back.
+	clearedSnapshot = readCleared(d.cleared);
+	justCleared = clearedSnapshot !== null;
+	clearedFits = true;
 	saveState = 'saved';
 }
 
@@ -258,6 +308,13 @@ function load() {
 			if (typeof d.shell === 'string' && (SHELL_IDS as readonly string[]).includes(d.shell)) {
 				shell = d.shell as ShellId;
 			}
+			// The confirm says "you can undo". It was true until the tab closed, and
+			// then it quietly wasn't: the offer lived in module state and the words
+			// were nowhere on disk. Clearing a draft and shutting the laptop is not
+			// an exotic sequence — it is the most ordinary way to walk away from a
+			// mistake, and it was the one path where the promise did not hold.
+			clearedSnapshot = readCleared(d.cleared);
+			justCleared = clearedSnapshot !== null;
 		}
 	} catch {
 		// corrupted draft — start fresh rather than crash
@@ -289,13 +346,22 @@ function switchShell(next: ShellId) {
 	scheduleSave();
 }
 
-function clearDraft() {
-	clearedSnapshot = snapshot();
+/**
+ * `offer` is whether the way back should be held out afterwards. It is decided
+ * here rather than by a call after the fact because this function persists: set
+ * from outside, the flag arrived after the write and the offer never reached
+ * disk at all, so closing the tab took it with no sign it had been there.
+ */
+function clearDraft(offer = false) {
+	const wiped = snapshot();
 	recordEdit(true);
 	text = '';
 	selStart = 0;
 	selEnd = 0;
 	fileHandle = null;
+	justCleared = offer && wiped.text !== '';
+	clearedSnapshot = justCleared ? wiped : null;
+	clearedFits = true;
 	if (browser && loaded) persist();
 	saveState = 'idle';
 	wantsFocus = true;
@@ -314,8 +380,7 @@ function requestClear(): boolean {
 	if (!window.confirm('Clear the draft? This wipes the locally saved copy too — you can undo.')) {
 		return false;
 	}
-	clearDraft();
-	noteCleared();
+	clearDraft(true);
 	return true;
 }
 
@@ -516,6 +581,7 @@ export const doc = {
 	undo,
 	redo,
 	restoreCleared,
+	refuseCleared,
 	keepThisCopy,
 	dismissCleared
 };
