@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { untrack, type Component } from 'svelte';
+	import { tick, untrack, type Component } from 'svelte';
 	import { version } from '$app/environment';
 	import { doc, type ShellId } from '$lib/state.svelte';
 	import { prefs, YOURS_HUES, YOURS_PAPERS, YOURS_ROOMS } from '$lib/prefs.svelte';
@@ -160,12 +160,23 @@
 		} catch {
 			// refused or unavailable — focus mode is still worth having
 		}
+		// Entering hides the header the button lives in; leaving unmounts the
+		// exit button — either way the element that had focus is gone and focus
+		// falls to <body>, silent and unanchored. Send it back to the editor,
+		// but only if it actually dropped: an unconditional wantsFocus would pull
+		// a mid-draft caret to the end in the rich rooms (their wantsFocus effect
+		// collapses to end), regressing the ⌘./Esc paths that already work.
+		await tick();
+		if (document.activeElement === document.body || document.activeElement === null) {
+			doc.wantsFocus = true;
+		}
 	}
 
 	// Leaving fullscreen by any other route (F11, the browser's own Esc) must
-	// not strand the writer in a focus mode they believe they've left.
+	// not strand the writer in a focus mode they believe they've left — and it
+	// routes through setFocus so leaving that way re-homes focus too.
 	function onFullscreenChange() {
-		if (!document.fullscreenElement && prefs.focus) prefs.focus = false;
+		if (!document.fullscreenElement && prefs.focus) void setFocus(false);
 	}
 
 	/**
@@ -578,7 +589,6 @@
 				<button
 					type="button"
 					class="room-btn"
-					aria-pressed={prefs.focus}
 					title="Focus mode — full screen ({isMac ? '⌘.' : 'Ctrl+.'} — Esc to leave)"
 					onclick={() => void setFocus(true)}
 				>
@@ -689,6 +699,9 @@
 		--line: #d9d3c7;
 		/* AA against --bg in both themes; the Undo offer must not be decorative. */
 		--undo: #9a5b1e;
+		/* Clear's hover red. 4.74:1 on the light --bg; overridden per dark block
+		   because this same value is only 3.26:1 there. */
+		--danger: #c0392b;
 		background: var(--bg);
 		color: var(--fg);
 		font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
@@ -733,6 +746,8 @@
 			--muted: #98917f;
 			--line: #383530;
 			--undo: #d8a25e;
+			/* dark-scoped only: 5.73:1 here, but 2.69:1 on the light --bg. */
+			--danger: #e2725b;
 		}
 	}
 	.room-app.theme-dark {
@@ -741,6 +756,7 @@
 		--muted: #98917f;
 		--line: #383530;
 		--undo: #d8a25e;
+		--danger: #e2725b;
 	}
 	.room-wordmark {
 		font-family: Georgia, 'Times New Roman', serif;
@@ -843,7 +859,7 @@
 		transition: color 120ms;
 	}
 	.room-clear:hover {
-		color: #c0392b;
+		color: var(--danger);
 	}
 	/* Transient way back from Clear. Reads as an offer, not chrome — it leaves
 	   again on its own once the moment of regret has passed. */
@@ -1014,6 +1030,14 @@
 		background: transparent;
 		padding: 0.1rem 0.3rem;
 		margin-left: auto;
+	}
+	/* On a touch keyboard, a sub-16px field makes iOS zoom in the moment it is
+	   focused. Coarse-only so the desktop panel keeps its 12px; max(16px, …) is
+	   the editors' own idiom for the same guard. */
+	@media (pointer: coarse) {
+		.prefs-num {
+			font-size: max(16px, 1em);
+		}
 	}
 	/* The notice. Chrome, but it draws nothing until there is something to say —
 	   so the writing surface still owns the viewport in the steady state.

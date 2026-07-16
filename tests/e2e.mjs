@@ -403,12 +403,27 @@ check('the 404 page names itself', (await page.locator('h1').textContent()).incl
 await page.goto(BASE + '/', { waitUntil: 'networkidle' });
 check('yours tab present', (await tab('Yours').count()) === 1);
 
+// The Focus button is a one-way action, not a persistent toggle — the way out
+// is a different control (.focus-exit). aria-pressed pinned it to "false"
+// forever, which a screen reader reads as a toggle that never toggles.
+check('the Focus button is an action, not a stuck toggle',
+	(await page.getByRole('button', { name: 'Focus', exact: true }).getAttribute('aria-pressed')) === null);
+
+await tab('Bare').click();
 await page.getByRole('button', { name: 'Focus', exact: true }).click();
 check('focus hides chrome', (await page.locator('header.room-top').count()) === 0 &&
 	(await page.locator('footer.room-foot').count()) === 0);
+// Entering used to drop focus to <body>; it belongs in the editor, where the
+// writer is trying to get to. setFocus re-homes after an awaited tick (and the
+// awaited requestFullscreen), so give that chain a beat — as the leave path does.
+await page.waitForTimeout(150);
+check('entering focus mode keeps focus in the editor',
+	await page.evaluate(() => !!document.activeElement?.closest('.room-main')));
 await page.keyboard.press('Escape');
 await page.waitForTimeout(100);
 check('escape exits focus', (await page.locator('header.room-top').count()) === 1);
+check('leaving focus mode returns focus to the editor',
+	await page.evaluate(() => !!document.activeElement?.closest('.room-main')));
 
 const prefsBtn = () => page.locator('summary[aria-label="Preferences"]');
 await prefsBtn().click();
@@ -423,6 +438,11 @@ const root = await page.evaluate(() => ({
 	scheme: getComputedStyle(document.documentElement).colorScheme
 }));
 check('dark theme override reaches the document root', root.bg === 'rgb(25, 24, 23)' && root.scheme === 'dark', JSON.stringify(root));
+// Pull-to-refresh over the full-bleed writing surface reloads the page and
+// throws away the in-memory undo stack. Contained on the root so the local
+// bounce stays but the chaining/PTR does not.
+const overscroll = await page.evaluate(() => getComputedStyle(document.documentElement).overscrollBehaviorY);
+check('the root contains overscroll (no pull-to-refresh)', overscroll === 'contain', overscroll);
 // /verify is reached from a themed page's footer, so it must arrive themed.
 await page.locator('a[href="/verify"]').click();
 await page.waitForTimeout(400);
@@ -980,6 +1000,27 @@ await phonePage.waitForTimeout(400);
 await phonePage.keyboard.press('Escape');
 await phonePage.waitForTimeout(500);
 check('the strip still shows the room after a focus round trip', (await pillVisible()) === 100, `${await pillVisible()}% of the active pill is on screen`);
+
+// A sub-16px field makes iOS zoom the page in the moment it's focused. The word
+// goal input was 12px; on a coarse pointer it must reach 16px.
+await phonePage.locator('summary[aria-label="Preferences"]').click();
+await phonePage.waitForTimeout(150);
+const numSize = await phonePage.$eval('.prefs-num', (el) => parseFloat(getComputedStyle(el).fontSize));
+check('the word-goal input is 16px on a phone (no zoom-on-focus)', numSize >= 16, `${numSize}px`);
+await phonePage.locator('summary[aria-label="Preferences"]').click();
+
+// Scratch's menu bar opened each menu on mouseenter — but the tap that opens a
+// menu also fires it, so on touch it took two taps to close one. Gated on a
+// real mouse now: one tap opens, one tap closes.
+await phonePage.locator('button.room-tab', { hasText: 'Scratch' }).click();
+await phonePage.waitForTimeout(150);
+const fileBtn = phonePage.locator('button[aria-haspopup="menu"]', { hasText: 'File' });
+await fileBtn.tap();
+await phonePage.waitForTimeout(100);
+check('a Scratch menu opens on the first tap', (await fileBtn.getAttribute('aria-expanded')) === 'true');
+await fileBtn.tap();
+await phonePage.waitForTimeout(100);
+check('and closes on the next tap, not the one after', (await fileBtn.getAttribute('aria-expanded')) === 'false');
 await phone.close();
 
 // ── 19. Shortcuts follow the keycap, not the US-QWERTY position ─────────────
@@ -1036,6 +1077,39 @@ const beforeCyrillic = await textarea().inputValue();
 await pressLayout('я', 'KeyZ');
 await page.waitForTimeout(250);
 check('Cyrillic Ctrl+я still undoes', (await textarea().inputValue()) !== beforeCyrillic, `stayed at ${JSON.stringify(beforeCyrillic)}`);
+
+// ── 19a. Clear's hover red is legible in both themes ────────────────────────
+//
+// The red was a single light-mode value, 3.26:1 on the dark background — the
+// one warning colour the app has, unreadable in the dark. It is a token now,
+// overridden per theme; this proves the dark one is not still the light one.
+for (const scheme of ['light', 'dark']) {
+	const dc = await browser.newContext({ viewport: { width: 1280, height: 900 }, colorScheme: scheme });
+	watchOrigins(dc);
+	const dp = await dc.newPage();
+	await dp.goto(BASE + '/', { waitUntil: 'networkidle' });
+	await dp.getByRole('button', { name: 'Clear', exact: true }).hover();
+	await dp.waitForTimeout(450); // transition-colors settles
+	const r = await dp.evaluate(() => {
+		const toRGB = (css) => {
+			const c = document.createElement('canvas').getContext('2d');
+			c.fillStyle = css;
+			c.fillRect(0, 0, 1, 1);
+			const d = c.getImageData(0, 0, 1, 1).data;
+			return [d[0], d[1], d[2]];
+		};
+		const lum = ([a, b, c]) => {
+			const f = (v) => ((v /= 255) <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
+			return 0.2126 * f(a) + 0.7152 * f(b) + 0.0722 * f(c);
+		};
+		const c = getComputedStyle(document.querySelector('.room-clear')).color;
+		const bg = getComputedStyle(document.querySelector('.room-app')).backgroundColor;
+		const [a, b] = [lum(toRGB(c)), lum(toRGB(bg))].sort((x, y) => y - x);
+		return { ratio: +((a + 0.05) / (b + 0.05)).toFixed(2), color: c };
+	});
+	check(`Clear's hover red clears AA in ${scheme} mode`, r.ratio >= 4.5, `${r.ratio}:1 (${r.color})`);
+	await dc.close();
+}
 
 // ── 19b. Focus mode's only exit is legible on any room ──────────────────────
 //
@@ -1217,6 +1291,24 @@ for (const room of ['Bare', 'Scratch', 'Pad', 'Term', 'Mail', 'Doc', 'Post', 'Yo
 	);
 	check(`${room}: the editor does not invite spellcheck`, !invites);
 }
+
+// ── 20b. The editor follows the script the writer is using ──────────────────
+//
+// dir="auto" lets a right-to-left first character lay the line out right-to-left.
+// Without it a Hebrew or Arabic draft types left-to-right with the punctuation
+// on the wrong end. One attribute, both editors.
+await page.goto(BASE + '/', { waitUntil: 'networkidle' });
+await tab('Bare').click();
+await textarea().fill('שלום עולם');
+check('a plain-room editor goes RTL for RTL text',
+	(await page.evaluate(() => getComputedStyle(document.querySelector('.grow-wrap textarea')).direction)) === 'rtl');
+await textarea().fill('hello world');
+check('and back to LTR for LTR text',
+	(await page.evaluate(() => getComputedStyle(document.querySelector('.grow-wrap textarea')).direction)) === 'ltr');
+await tab('Mail').click();
+await rich().fill('مرحبا بالعالم');
+check('a rich-room editor goes RTL for RTL text',
+	(await page.evaluate(() => getComputedStyle(document.querySelector('.rich')).direction)) === 'rtl');
 
 // ── 21. Paper is not a room ─────────────────────────────────────────────────
 //

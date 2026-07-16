@@ -5,6 +5,12 @@
 html {
 	background: #f2efe9;
 	color-scheme: light dark;
+	/* Kill scroll-chaining and pull-to-refresh; `contain`, not `none`, so the
+	   local rubber-band bounce stays. A pull-to-refresh reload throws away the
+	   in-memory undo/redo stack (the draft itself is saved), and the gesture is
+	   easy to trigger over a full-bleed writing surface. On the root element the
+	   value reaches the viewport; on <body> it would not. */
+	overscroll-behavior-y: contain;
 }
 @media (prefers-color-scheme: dark) {
 	html {

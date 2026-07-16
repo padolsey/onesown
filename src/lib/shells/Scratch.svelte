@@ -173,9 +173,13 @@
 					aria-expanded={openMenu === menu.name}
 					onclick={(e) => toggleMenu(e, menu.name)}
 					onkeydown={(e) => buttonKeydown(e, menu.name)}
-					onmouseenter={() => {
-						if (openMenu) openMenu = menu.name;
-					}}
+					onpointerenter={(e) => {
+					// Once a menu is open, sliding across the bar opens each in turn —
+					// but only under a real mouse. On touch, the tap that opens a menu
+					// also fires pointerenter, and an ungated mouseenter re-opened the
+					// menu the click was about to close, so it cost two taps to shut.
+					if (e.pointerType === 'mouse' && openMenu) openMenu = menu.name;
+				}}
 				>
 					{menu.name}
 				</button>

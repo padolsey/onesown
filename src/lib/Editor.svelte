@@ -124,6 +124,7 @@
 		{placeholder}
 		spellcheck={false}
 		autocapitalize={autocap ? 'sentences' : 'off'}
+		dir="auto"
 		aria-label={label}
 		oninput={trackSelection}
 		onclick={trackSelection}

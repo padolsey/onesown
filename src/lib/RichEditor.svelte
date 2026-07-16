@@ -91,6 +91,7 @@
 	aria-multiline="true"
 	aria-label={label}
 	spellcheck={false}
+	dir="auto"
 	oninput={serialize}
 	onkeyup={refreshActive}
 	onpaste={onPaste}
