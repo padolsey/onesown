@@ -42,3 +42,22 @@ html[data-theme='dark'] {
 	outline: 2px solid currentColor;
 	outline-offset: 2px;
 }
+
+/* Paper is white. The root carries the room's paper colour so that overscroll
+   and native UI match it, and with "Background graphics" ticked in the print
+   dialog that colour reaches the sheet — a dark theme printed at 171/255 mean
+   page brightness before this. The specificity has to match the data-theme
+   overrides it is undoing. */
+@media print {
+	html,
+	html[data-theme='light'],
+	html[data-theme='dark'] {
+		background: #fff;
+	}
+}
+
+/* No `size` — naming A4 would letterbox every US Letter sheet. The dialog
+   already knows what paper is in the tray. */
+@page {
+	margin: 18mm 16mm;
+}

@@ -6,6 +6,7 @@
 	import { inkFor, type RGB } from '$lib/palette';
 	import { readPhoto } from '$lib/photo';
 	import { shellList } from '$lib/shells';
+	import PrintSheet from '$lib/PrintSheet.svelte';
 	import Bare from '$lib/shells/Bare.svelte';
 	import Scratch from '$lib/shells/Scratch.svelte';
 	import Pad from '$lib/shells/Pad.svelte';
@@ -609,6 +610,11 @@
 		<ShellView />
 	</main>
 
+	<!-- Not a room, so it lives outside the room and outside the focus gate: ⌘P
+	     works from focus mode, where there is no chrome to reach for anyway. It is
+	     display:none until a print begins. -->
+	<PrintSheet />
+
 	<!-- Outside the focus-mode gate on purpose: a writer can sit in focus mode for
 	     a long stretch, and "your draft isn't saving" is exactly the thing they
 	     must not miss. Carries the live region too, for the same reason. -->
@@ -691,6 +697,30 @@
 	   box, so nothing measures the chrome — the flex column above already did.
 	   `safe` keeps a room that outgrows the viewport reachable from its top
 	   rather than centred and clipped. */
+	/* Paper is not a room: the room and every piece of chrome leave the sheet.
+	   Gated on the sheet existing, and that gate is load-bearing rather than
+	   tidy: hide .room-main unconditionally and a browser where neither print
+	   trigger fires prints a blank page — strictly worse than the imperfect
+	   thing it does today. Absence degrades to today instead.
+
+	   :has(:global(.print-sheet)) — not :has(.print-sheet). Svelte would scope
+	   the inner class to THIS component's hash, and .print-sheet belongs to
+	   PrintSheet's. The selector then silently matches nothing and the chrome
+	   prints. */
+	@media print {
+		.room-app:has(:global(.print-sheet)) :global(.room-top),
+		.room-app:has(:global(.print-sheet)) :global(.room-foot),
+		.room-app:has(:global(.print-sheet)) :global(.room-notice),
+		.room-app:has(:global(.print-sheet)) :global(.focus-exit),
+		.room-app:has(:global(.print-sheet)) :global(.room-main) {
+			display: none !important;
+		}
+		.room-app:has(:global(.print-sheet)) {
+			background: #fff;
+			color: #000;
+			min-height: 0;
+		}
+	}
 	.room-main {
 		display: flex;
 		flex-direction: column;

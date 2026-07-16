@@ -401,10 +401,18 @@ function noteDisk(message: string) {
 	diskNoteTimer = setTimeout(() => (diskNote = null), 3000);
 }
 
+/**
+ * The draft's own name, taken from its first line — the only place a draft that
+ * is deliberately never titled can have one. ⌘S slugifies it into a filename;
+ * printing puts it in document.title, which is what the browser prints in its
+ * header and what Save-as-PDF offers as the filename.
+ */
+function titleOf() {
+	return stripMarkers(text.split('\n')[0] ?? '').trim().slice(0, 60) || 'draft';
+}
+
 function suggestedName() {
-	const firstLine = stripMarkers(text.split('\n')[0] ?? '');
-	const slug = firstLine
-		.trim()
+	const slug = titleOf()
 		.slice(0, 40)
 		.toLowerCase()
 		.replace(/[^a-z0-9]+/g, '-')
@@ -543,6 +551,10 @@ export const doc = {
 	},
 	get conflict() {
 		return conflict;
+	},
+	/** The draft's name, from its first line. See titleOf. */
+	get title() {
+		return titleOf();
 	},
 	get words() {
 		const t = text.trim();

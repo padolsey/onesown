@@ -1198,6 +1198,42 @@ for (const room of ['Bare', 'Scratch', 'Pad', 'Term', 'Mail', 'Doc', 'Post', 'Yo
 	await fc.close();
 }
 
+// ── 21. Paper is not a room ─────────────────────────────────────────────────
+//
+// Printing the live editor loses words. Editor.svelte grows the textarea to its
+// content, so there is no scrollport to clip, and Chromium slices the control
+// across page breaks and drops what lands on the cut — measured, 6 of 8 rooms,
+// with Bare swallowing two lines of 400 between intact neighbours. So the sheet
+// is built from the canonical string instead, and every room prints the same.
+await page.goto(BASE + '/', { waitUntil: 'networkidle' });
+await tab('Term').click();
+await textarea().fill('On the Question of Rooms\n\nThe **first** thought and a *second*, with <u>a third</u>.\nA & b < c');
+await page.waitForTimeout(700);
+const titleBefore = await page.title();
+await page.emulateMedia({ media: 'print' });
+await page.waitForTimeout(300);
+
+check('a sheet exists only while printing', (await page.locator('.print-sheet').count()) === 1);
+check('the room does not go to paper', !(await page.locator('main.room-main').isVisible().catch(() => false)));
+check('the chrome does not go to paper', !(await page.locator('header.room-top').isVisible().catch(() => false)));
+// Term has no marker codec at all, and prints them rendered like everywhere
+// else: one draft, one paper, whichever door you wrote behind.
+check('markers reach paper as formatting',
+	(await page.locator('.print-sheet b').count()) === 1 &&
+	(await page.locator('.print-sheet i').count()) === 1 &&
+	(await page.locator('.print-sheet u').count()) === 1);
+const sheetText = (await page.locator('.print-sheet').innerText()).replace(/\s+/g, ' ').trim();
+check('the whole draft reaches paper, punctuation and all', sheetText.includes('A & b < c') && sheetText.startsWith('On the Question of Rooms'), sheetText.slice(0, 60));
+check('no asterisks survive to paper', !sheetText.includes('**'), sheetText);
+// The printout is the writer's: this is what the browser's header prints and
+// what Save-as-PDF offers as the filename.
+check('paper carries the draft\'s name, not the app\'s', (await page.title()) === 'On the Question of Rooms', await page.title());
+
+await page.emulateMedia({ media: 'screen' });
+await page.waitForTimeout(300);
+check('the sheet leaves when the print does', (await page.locator('.print-sheet').count()) === 0);
+check('the app takes its name back', (await page.title()) === titleBefore);
+
 // Both terminal guards, together and last, so an appended section can't fall
 // outside them the way this one silently did.
 check('no page JS errors', pageErrors.length === 0, pageErrors.slice(0, 3).join(' | '));
