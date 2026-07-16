@@ -39,7 +39,7 @@
 		class="flex flex-1 flex-col px-4 py-4 text-[14px] leading-[1.55] text-[#1f2328]"
 		style="--editor-caret: #1a73e8; --editor-selection: rgba(26, 115, 232, 0.22); --editor-min: 14rem;"
 	>
-		<RichEditor bind:this={editor} spell={true} label="Draft — email body" />
+		<RichEditor bind:this={editor} label="Draft — email body" />
 	</div>
 	<footer class="flex shrink-0 items-center gap-1 border-t border-stone-100 px-4 py-3">
 		<span class="mail-send mr-2" aria-hidden="true"></span>

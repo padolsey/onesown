@@ -46,7 +46,7 @@
 				class="flex flex-1 flex-col text-[14.5px] leading-[1.45] text-[#1f1f1f]"
 				style="--editor-caret: #185abd; --editor-selection: rgba(58, 118, 216, 0.25); --editor-min: 14rem;"
 			>
-				<RichEditor bind:this={editor} spell={true} label="Draft — office document" />
+				<RichEditor bind:this={editor} label="Draft — office document" />
 			</div>
 		</div>
 	</div>

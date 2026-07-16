@@ -4,13 +4,19 @@
 
 	let {
 		placeholder = '',
-		spell = false,
+		autocap = false,
 		label = 'Draft',
 		nowrap = false,
 		markers = false
 	}: {
 		placeholder?: string;
-		spell?: boolean;
+		/**
+		 * Capitalise the first letter of each sentence on a soft keyboard. A local
+		 * keyboard hint with no privacy dimension — this is NOT spellcheck, which
+		 * is off everywhere and not a knob (see the textarea). Prose rooms want it;
+		 * a terminal or a scratch file does not.
+		 */
+		autocap?: boolean;
 		label?: string;
 		nowrap?: boolean;
 		/** Let ⌘B/⌘I type the draft's markers. Off where asterisks are the idiom. */
@@ -105,13 +111,19 @@
 	}
 </script>
 
+<!-- spellcheck is off, deliberately and not by a prop. The page promises nothing
+     you write leaves it, and enforces that with a CSP the browser obeys — but a
+     browser's spellchecker runs outside the page's network context, where the
+     CSP cannot see it, and Chrome's and Edge's cloud modes send what you type to
+     their servers. That is the writer's own browser setting, which the page can
+     neither cause nor prevent, but it can decline to invite it. -->
 <div class="grow-wrap" class:nowrap data-value={doc.text + '\n'}>
 	<textarea
 		bind:this={el}
 		bind:value={doc.text}
 		{placeholder}
-		spellcheck={spell}
-		autocapitalize={spell ? 'sentences' : 'off'}
+		spellcheck={false}
+		autocapitalize={autocap ? 'sentences' : 'off'}
 		aria-label={label}
 		oninput={trackSelection}
 		onclick={trackSelection}

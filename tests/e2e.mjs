@@ -1198,6 +1198,26 @@ for (const room of ['Bare', 'Scratch', 'Pad', 'Term', 'Mail', 'Doc', 'Post', 'Yo
 	await fc.close();
 }
 
+// ── 20a. No room invites the browser to spell-check ─────────────────────────
+//
+// "Nothing you write leaves this page" is the product, and it is meant
+// literally. A browser's spellchecker runs outside the page's network context,
+// where the CSP cannot reach it, and Chrome's and Edge's cloud modes send what
+// you type to their servers. The page can't stop a writer's own browser setting
+// — but it must not be the thing that invites it. So no editor, in any room,
+// carries spellcheck="true".
+await page.goto(BASE + '/', { waitUntil: 'networkidle' });
+for (const room of ['Bare', 'Scratch', 'Pad', 'Term', 'Mail', 'Doc', 'Post', 'Yours']) {
+	await tab(room).click();
+	await page.waitForTimeout(120);
+	const invites = await page.evaluate(() =>
+		[...document.querySelectorAll('textarea, [contenteditable="true"]')].some(
+			(el) => el.spellcheck === true
+		)
+	);
+	check(`${room}: the editor does not invite spellcheck`, !invites);
+}
+
 // ── 21. Paper is not a room ─────────────────────────────────────────────────
 //
 // Printing the live editor loses words. Editor.svelte grows the textarea to its

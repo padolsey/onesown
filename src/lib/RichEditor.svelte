@@ -2,7 +2,7 @@
 	import { doc } from './state.svelte';
 	import { markersToHtml, domToMarkers } from './markers';
 
-	let { spell = true, label = 'Draft' }: { spell?: boolean; label?: string } = $props();
+	let { label = 'Draft' }: { label?: string } = $props();
 
 	let el = $state<HTMLDivElement | null>(null);
 	let active = $state({ bold: false, italic: false, underline: false });
@@ -90,7 +90,7 @@
 	tabindex="0"
 	aria-multiline="true"
 	aria-label={label}
-	spellcheck={spell}
+	spellcheck={false}
 	oninput={serialize}
 	onkeyup={refreshActive}
 	onpaste={onPaste}

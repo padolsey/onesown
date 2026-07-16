@@ -28,7 +28,7 @@
 			class="flex-1 pt-1.5 text-[18px] leading-[1.45] text-[#0f1419]"
 			style="--editor-caret: #1d9bf0; --editor-selection: rgba(29, 155, 240, 0.22); --editor-min: 7rem;"
 		>
-			<Editor spell={true} placeholder="What’s the word?" label="Draft — short post" />
+			<Editor autocap placeholder="What’s the word?" label="Draft — short post" />
 		</div>
 	</div>
 	<div class="mt-3 flex items-center border-t border-stone-100 pt-3">
