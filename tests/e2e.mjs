@@ -333,6 +333,14 @@ if (attestation) {
 	check('verify page confirms match', (await page.locator('.v-facts').textContent()).includes('matches this page ✓'));
 } else {
 	console.log('SKIP  attestation checks (deployment.json not served — dev build)');
+	// The page used to call every absence "(development build)". The worker that
+	// makes this page readable offline only registers in production, so that
+	// sentence was unreachable in dev and false everywhere it could be read.
+	// Here — the one place it IS a dev build — it should say so.
+	const row = (await page.locator('.v-facts').textContent()) ?? '';
+	check('dev attestation row names the dev server', row.includes('not emitted by the dev server'), row.trim().slice(-90));
+	check('dev attestation row does not claim to be a development build elsewhere',
+		!row.includes('unavailable (development build)'));
 }
 const isDeployed = !/localhost|127\.0\.0\.1/.test(BASE);
 if (isDeployed) {
@@ -350,6 +358,22 @@ if (isDeployed) {
 		return false;
 	});
 	check('service worker registers', swRegistered);
+	// The cache is keyed to one commit and must therefore contain exactly one
+	// commit's bytes. The runtime cache.put that used to be here wrote whatever
+	// the network returned into it — so a fetch made after a new deploy left the
+	// cache describing a mixture, and the attestation in particular turned "what
+	// is the server serving now" into a remembered answer. This has just loaded
+	// /verify, which fetches it, so if anything re-writes responses into the
+	// cache the attestation is what shows up first.
+	const cachedAttestation = await page.evaluate(async () => {
+		for (const name of await caches.keys()) {
+			const keys = await (await caches.open(name)).keys();
+			const hit = keys.find((r) => new URL(r.url).pathname === '/.well-known/deployment.json');
+			if (hit) return name;
+		}
+		return null;
+	});
+	check('the attestation is never cached', cachedAttestation === null, `found in cache ${cachedAttestation}`);
 	// A wrong address used to answer zero bytes: a blank page, no way home, no
 	// sign the site was alive. Only Cloudflare can be asked this — the routing
 	// is its not_found_handling, not the app's — so it is checked where it runs.

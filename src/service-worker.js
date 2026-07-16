@@ -9,6 +9,11 @@
  * own cache and old ones are dropped on activate. Verification note: a browser
  * may keep running a previously-cached version until the worker updates — see
  * DEPLOYMENT_VERIFICATION.md, "Offline behavior".
+ *
+ * The attestation (/.well-known/deployment.json) is deliberately absent from
+ * this cache. It answers "what is the server serving right now", and a cached
+ * answer to that question is not an answer to it. Offline, /verify says it
+ * could not be reached — which is the truth, and better than a remembered one.
  */
 import { build, files, version } from '$service-worker';
 
@@ -49,9 +54,16 @@ self.addEventListener('fetch', (event) => {
 				if (hit) return hit;
 			}
 			try {
-				const response = await fetch(request);
-				if (response.ok) cache.put(request, response.clone());
-				return response;
+				// Deliberately not written back to the cache. This cache is keyed to
+				// one commit, but a response fetched after a new deploy is a
+				// different version's bytes — so writing them here left
+				// onesown-<A> describing a mixture of A and B. Offline, that served
+				// B's HTML from A's cache: the room drew in full and then never
+				// hydrated, because the chunk hashes it asked for were not the ones
+				// A had cached. An empty editor and dead buttons, at exactly the
+				// moment the worker exists to cover. install() is now the only
+				// writer, so a cache always means precisely one version.
+				return await fetch(request);
 			} catch {
 				const hit =
 					(await cache.match(request)) ??

@@ -1,9 +1,18 @@
 <script lang="ts">
-	import { version } from '$app/environment';
+	import { dev, version } from '$app/environment';
 
 	// The attestation the server is actually serving right now — fetched live so
 	// a mismatch with this page's build-time commit is visible (e.g. a stale
-	// cached page). null = not loaded yet; false = unavailable (dev server).
+	// cached page). null = not loaded yet; false = nothing to show, with `why`
+	// saying which of several quite different reasons that is.
+	//
+	// It used to collapse all of them into "unavailable (development build)".
+	// That sentence could only ever be read in production — the worker that
+	// makes this page available offline is not registered in dev — so the one
+	// page whose entire job is to be accurate about what you are running told
+	// offline readers a plain falsehood. This page is supposed to observe. Where
+	// it can observe (a status code, a body that will not parse), it now says
+	// what it saw; where it genuinely cannot tell, it says that instead.
 	interface Attestation {
 		commit: string;
 		commitUrl: string;
@@ -13,12 +22,37 @@
 		repository: string;
 	}
 	let served = $state<Attestation | null | false>(null);
+	let why = $state<'malformed' | 'unreachable' | number | null>(null);
 
 	$effect(() => {
 		fetch('/.well-known/deployment.json')
-			.then((r) => (r.ok ? r.json() : false))
+			.then(async (r) => {
+				if (!r.ok) {
+					why = r.status;
+					return false;
+				}
+				// A body that arrived but will not parse is a fact about the
+				// deployment, not about your connection — and it is the anomaly most
+				// worth surfacing here. Letting r.json() reject into the catch below
+				// would have filed a tampered or truncated attestation under "you may
+				// be offline".
+				try {
+					const d = await r.json();
+					if (!d || typeof d.commit !== 'string') {
+						why = 'malformed';
+						return false;
+					}
+					return d as Attestation;
+				} catch {
+					why = 'malformed';
+					return false;
+				}
+			})
 			.then((d) => (served = d))
-			.catch(() => (served = false));
+			.catch(() => {
+				why = 'unreachable';
+				served = false;
+			});
 	});
 
 	const short = version.slice(0, 7);
@@ -72,7 +106,21 @@
 					</dd>
 				{:else if served === false}
 					<dt>Attestation</dt>
-					<dd>/.well-known/deployment.json is unavailable (development build)</dd>
+					<dd>
+						{#if dev}
+							not emitted by the dev server — <code>/.well-known/deployment.json</code> exists in
+							production builds only
+						{:else if why === 'malformed'}
+							<a class="v-link" href="/.well-known/deployment.json">/.well-known/deployment.json</a>
+							— <strong>served, but could not be read</strong> as the expected JSON
+						{:else if typeof why === 'number'}
+							<a class="v-link" href="/.well-known/deployment.json">/.well-known/deployment.json</a>
+							— the server returned {why}
+						{:else}
+							/.well-known/deployment.json couldn’t be reached — you may be offline, in which case
+							this page came from your browser’s cache and may not be what the site is serving now
+						{/if}
+					</dd>
 				{/if}
 			</dl>
 		</section>
