@@ -433,6 +433,45 @@ check('post limit variant', (await page.locator('section span.tabular-nums').tex
 await page.locator('label', { hasText: '280' }).locator('input').check();
 await prefsBtn().click();
 
+// ── 13a. The prefs panel closes like a popover ──────────────────────────────
+//
+// A bare <details> dismisses on neither Escape nor an outside click, so this sat
+// open over the writing surface until you found the ⚙ again. It got worse when
+// the Yours controls moved in: the panel now covers the room you are choosing a
+// pigment for. The trap in fixing it is closing on the panel's OWN clicks — a
+// naive window handler shuts it the instant you touch a radio.
+const panelOpen = () => page.locator('.prefs-panel').isVisible();
+await prefsBtn().click();
+check('prefs panel opens', await panelOpen());
+await page.locator('.prefs-panel label', { hasText: 'dark' }).locator('input').check();
+check('prefs panel survives its own controls', await panelOpen(), 'clicking a radio inside closed it');
+await page.locator('.room-wordmark').click();
+await page.waitForTimeout(150);
+check('prefs panel closes on an outside click', !(await panelOpen()));
+await prefsBtn().click();
+check('prefs panel reopens', await panelOpen());
+await page.keyboard.press('Escape');
+await page.waitForTimeout(250);
+check(
+	'prefs panel closes on Escape',
+	!(await panelOpen()),
+	await page.evaluate(() => `details.open=${document.querySelector('details.room-prefs')?.open} focus=${document.activeElement?.tagName}/${document.activeElement?.getAttribute('aria-label')}`)
+);
+check(
+	'closing the panel returns focus to the ⚙',
+	await page.evaluate(() => document.activeElement?.getAttribute('aria-label') === 'Preferences'),
+	'focus was dropped somewhere else'
+);
+// Escape must still belong to focus mode when the panel isn't the thing open.
+await page.keyboard.press('Control+.');
+await page.waitForTimeout(400);
+await page.keyboard.press('Escape');
+await page.waitForTimeout(400);
+check('Escape still leaves focus mode', (await page.locator('header.room-top').count()) === 1);
+await prefsBtn().click();
+await page.locator('.prefs-panel label', { hasText: 'system' }).locator('input').check();
+await prefsBtn().click();
+
 // ── 13b. Yours: the room you furnish, and cannot make unreadable ────────────
 //
 // The old room let you choose the ink, so half its paper/ink pairs failed AA and

@@ -30,6 +30,8 @@
 	let isMac = $state(false);
 	let showAbout = $state(false);
 	let roomStrip = $state<HTMLDivElement | null>(null);
+	let prefsOpen = $state(false);
+	let prefsSummary = $state<HTMLElement | null>(null);
 
 	// Trying a room, rather than previewing one. Reaching for a door or a pigment
 	// makes the room BE that, at full size, with your own words in it — leaving
@@ -131,6 +133,9 @@
 	// every path to here has one. Where it's unsupported (iPhone) or refused,
 	// hiding our own chrome still stands on its own.
 	async function setFocus(on: boolean) {
+		// The header is about to unmount and take the panel with it; leaving the
+		// flag set would strand Escape on a panel that isn't there.
+		if (on) prefsOpen = false;
 		prefs.focus = on;
 		try {
 			if (on) await document.documentElement.requestFullscreen?.();
@@ -207,6 +212,14 @@
 			void setFocus(!prefs.focus);
 			return;
 		}
+		// Escape closes the nearest thing first. The panel can't be open in focus
+		// mode — setFocus shuts it, and the header it lives in unmounts — so these
+		// two can never both want the same keypress; the order is for the reader.
+		if (e.key === 'Escape' && prefsOpen) {
+			prefsOpen = false;
+			prefsSummary?.focus();
+			return;
+		}
 		// Escape leaves focus mode — unless something closer (a menu, a dialog)
 		// is what the writer is escaping from.
 		if (e.key === 'Escape' && prefs.focus) {
@@ -235,7 +248,13 @@
 	<meta name="twitter:description" content="One draft, eight rooms. A notepad that swaps the app around your words." />
 </svelte:head>
 
-<svelte:window onkeydown={onKeydown} onbeforeunload={() => doc.flush()} />
+<svelte:window
+	onkeydown={onKeydown}
+	onclick={(e) => {
+		if (!(e.target instanceof Element) || !e.target.closest('.room-prefs')) prefsOpen = false;
+	}}
+	onbeforeunload={() => doc.flush()}
+/>
 <svelte:document onvisibilitychange={onVisibilityChange} onfullscreenchange={onFullscreenChange} />
 
 <div
@@ -283,8 +302,31 @@
 						title="Word goal">{doc.words}/{prefs.goal}w{doc.words >= prefs.goal ? ' ✓' : ''}</span
 					>
 				{/if}
-				<details class="room-prefs relative">
-					<summary class="room-btn" aria-label="Preferences" title="Preferences">⚙</summary>
+				<!-- A bare <details> light-dismisses on neither Escape nor an outside
+				     click — only <dialog> and popover get that free — so this one sat open
+				     over the paper until you found the ⚙ again. Harmless when it held
+				     three radios; not once it holds the room you are trying to look at.
+				     The window handler asks where the click landed rather than having the
+				     panel stop it, so nothing in here needs a handler that isn't a real
+				     interaction. -->
+				     prefsOpen is the ONLY authority on whether this is open, which is why
+				     the summary cancels its own default. Left to itself the element is a
+				     second writer for the same bit, and the toggle event that would
+				     reconcile the two is queued rather than immediate — and coalescing, so
+				     a close followed by a reopen inside one task fires nothing at all. The
+				     binding then holds a stale `false`, and Escape reads it and does
+				     nothing. One writer, no reconciliation to miss. -->
+				<details class="room-prefs relative" open={prefsOpen}>
+					<summary
+						bind:this={prefsSummary}
+						class="room-btn"
+						aria-label="Preferences"
+						title="Preferences"
+						onclick={(e) => {
+							e.preventDefault();
+							prefsOpen = !prefsOpen;
+						}}>⚙</summary
+					>
 					<div class="prefs-panel">
 						<fieldset>
 							<legend>Theme</legend>
