@@ -310,6 +310,30 @@ check('status bar restored', (await page.locator('footer', { hasText: 'Ln' }).co
 await menuBtn('Edit').click();
 await page.getByRole('menuitem', { name: 'Select All' }).click();
 check('edit > select all selects text', (await textarea().evaluate((el) => el.selectionEnd - el.selectionStart)) > 0);
+
+// Edit > Undo/Redo: the getters existed with no consumer until now. Fix a known
+// baseline of empty-with-no-history. The undo stack is in-memory module state
+// that only a reload resets — but empty the draft THROUGH the app before
+// reloading, or flush() on unload writes the old in-memory text back over the
+// storage and the reload loads that instead of the empty draft.
+await textarea().click();
+await page.keyboard.press('Control+a');
+await page.keyboard.press('Delete');
+await page.waitForTimeout(700); // let the empty draft persist before reload
+await page.reload({ waitUntil: 'networkidle' });
+await menuBtn('Edit').click();
+check('edit > undo is disabled with no history',
+	(await page.getByRole('menuitem', { name: 'Undo' }).getAttribute('aria-disabled')) === 'true');
+await menuBtn('Edit').click();
+await textarea().click();
+await page.keyboard.type('scratch this');
+await page.waitForTimeout(700); // settle into its own undo entry
+await menuBtn('Edit').click();
+await page.getByRole('menuitem', { name: 'Undo' }).click();
+check('edit > undo reverts the draft', (await textarea().inputValue()) === '');
+await menuBtn('Edit').click();
+await page.getByRole('menuitem', { name: 'Redo' }).click();
+check('edit > redo restores it', (await textarea().inputValue()) === 'scratch this');
 await menuBtn('Help').click();
 await page.getByRole('menuitem', { name: 'About Scratchpad' }).click();
 check('about dialog opens', (await page.getByRole('dialog', { name: 'About Scratchpad' }).count()) === 1);

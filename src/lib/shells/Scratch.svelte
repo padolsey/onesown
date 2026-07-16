@@ -40,6 +40,7 @@
 		label: string;
 		action: () => void;
 		checked?: () => boolean;
+		disabled?: () => boolean;
 	}
 
 	const menus: { name: string; items: MenuItem[] }[] = [
@@ -51,7 +52,18 @@
 				{ label: 'Save…', action: () => void doc.saveToDisk() }
 			]
 		},
-		{ name: 'Edit', items: [{ label: 'Select All', action: selectAll }] },
+		{
+			name: 'Edit',
+			items: [
+				// The draft owns its undo stack (it outlives the room), and Scratch's
+				// Edit menu had none of it — the canUndo/canRedo getters existed with
+				// no caller. These are real, functional controls, so the scenery rule
+				// (no named decoration) does not apply: "Undo" does undo.
+				{ label: 'Undo', action: () => doc.undo(), disabled: () => !doc.canUndo },
+				{ label: 'Redo', action: () => doc.redo(), disabled: () => !doc.canRedo },
+				{ label: 'Select All', action: selectAll }
+			]
+		},
 		{
 			name: 'Format',
 			items: [{ label: 'Word Wrap', action: () => (wordWrap = !wordWrap), checked: () => wordWrap }]
@@ -75,6 +87,7 @@
 	}
 
 	function runItem(item: MenuItem) {
+		if (item.disabled?.()) return;
 		openMenu = null;
 		item.action();
 	}
@@ -195,7 +208,10 @@
 							<button
 								type="button"
 								role="menuitem"
-								class="block w-full px-2 py-[3px] text-left text-[12px] hover:bg-[#000080] hover:text-white"
+								aria-disabled={item.disabled?.() ? 'true' : undefined}
+								class="block w-full px-2 py-[3px] text-left text-[12px] {item.disabled?.()
+									? 'text-[#808080]'
+									: 'hover:bg-[#000080] hover:text-white'}"
 								onclick={(e) => {
 									e.stopPropagation();
 									runItem(item);
