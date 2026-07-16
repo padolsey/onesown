@@ -1112,6 +1112,55 @@ for (const room of ['Bare', 'Scratch', 'Pad', 'Term', 'Mail', 'Doc', 'Post', 'Yo
 	check(`${room}: no button a screen reader cannot reach`, fake.deadButtons === 0, `${fake.deadButtons} pressable control(s) inside decoration`);
 }
 
+// ── 20. When saving fails, the app says so and keeps saying so ──────────────
+//
+// The draft key is made to refuse writes at the browser's own Storage API — the
+// real failure, not a stubbed one. Everything else still saves, so this is the
+// quota case a writer actually meets: a full box, one key too big for it.
+{
+	const fc = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+	watchOrigins(fc);
+	await fc.addInitScript(() => {
+		const set = Storage.prototype.setItem;
+		// Kept so the box can be given room again later; without a handle on the
+		// real one, "restoring" it just reinstalls the thrower.
+		window.__realSetItem = set;
+		Storage.prototype.setItem = function (k, v) {
+			if (k === 'onesown:v1') throw new DOMException('full', 'QuotaExceededError');
+			return set.call(this, k, v);
+		};
+	});
+	const fp = await fc.newPage();
+	await fp.goto(BASE + '/', { waitUntil: 'networkidle' });
+	await fp.locator('textarea').first().fill('words worth keeping');
+	await fp.waitForTimeout(900);
+
+	check('a failed autosave is announced', (await fp.locator('.room-notice').count()) === 1);
+	// The topbar had no 'error' arm, so it reassured while the notice contradicted
+	// it — the writer's ambient read on whether their words are safe, saying yes.
+	const status = (await fp.locator('.room-status').textContent())?.trim();
+	check('the status line stops claiming it autosaves', status === 'Not saving', status);
+
+	// The × remembered the message STRING, and the strings are constants — so one
+	// dismissal silenced this for the life of the tab while every save went on
+	// failing. There is nothing to dismiss now.
+	check('a notice you must act on cannot be dismissed away',
+		(await fp.locator('.notice-close, [aria-label="Dismiss notice"]').count()) === 0);
+	await fp.locator('textarea').first().fill('still typing into a tab that saves nothing');
+	await fp.waitForTimeout(900);
+	check('the notice is still there after more typing', (await fp.locator('.room-notice').count()) === 1);
+
+	// And it leaves when it stops being true, which is the only honest exit.
+	await fp.evaluate(() => {
+		Storage.prototype.setItem = window.__realSetItem;
+	});
+	await fp.locator('textarea').first().fill('and now the box has room again');
+	await fp.waitForTimeout(1200);
+	check('the notice retires itself once saving works', (await fp.locator('.room-notice').count()) === 0);
+	check('the status line recovers', ((await fp.locator('.room-status').textContent()) ?? '').includes('Saved'));
+	await fc.close();
+}
+
 // Both terminal guards, together and last, so an appended section can't fall
 // outside them the way this one silently did.
 check('no page JS errors', pageErrors.length === 0, pageErrors.slice(0, 3).join(' | '));

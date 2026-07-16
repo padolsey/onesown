@@ -104,19 +104,38 @@
 	// Reassurance only, and it earns its place in the topbar only where there's
 	// room. Anything the writer must actually act on goes to the notice below,
 	// which is visible at every width and in focus mode.
+	// 'error' had no arm here, so it fell through to the reassurance: the topbar
+	// said "Autosaves as you type" while autosave was failing and the notice
+	// beside it said so. The status line is the writer's only ambient read on
+	// whether their words are safe, and it was the one part of the screen still
+	// claiming they were.
 	const statusText = $derived(
 		doc.saveState === 'pending'
 			? 'Saving…'
 			: doc.saveState === 'saved'
 				? 'Saved in this browser'
-				: 'Autosaves as you type'
+				: doc.saveState === 'error'
+					? 'Not saving'
+					: 'Autosaves as you type'
 	);
 
 	// The one surface for things that went wrong or just happened. Disk notes
 	// expire on their own; a conflict or a failed autosave persists, because the
 	// writer's words are at stake and a 3s toast is not an answer to that.
-	let dismissedNotice = $state<string | null>(null);
-	const noticeText = $derived(
+	//
+	// There is no dismiss. There used to be, and it was worse than useless: it
+	// remembered the message STRING, and each condition's message is a constant,
+	// so dismissing it once suppressed that notice for the life of the tab. Both
+	// notices it could dismiss are the two the writer must act on. Dismiss the
+	// autosave error and you type on into a tab that persists nothing, told
+	// nothing. Dismiss the conflict and "Keep this one" goes with it — it lives
+	// in this block — taking the only route back to a saving tab.
+	//
+	// So it is deleted rather than repaired. Both of these retire themselves the
+	// moment their condition ends, which is the only honest way for a notice
+	// about the writer's words to leave: because it stopped being true, not
+	// because it was waved away.
+	const notice = $derived(
 		doc.diskNote ??
 			(doc.conflict
 				? 'This draft changed in another tab. Not saving, so neither copy is lost.'
@@ -124,9 +143,6 @@
 					? 'Couldn’t autosave — this draft is only in this tab.'
 					: null)
 	);
-	const notice = $derived(noticeText !== null && noticeText !== dismissedNotice ? noticeText : null);
-	// Disk notes retire themselves; the rest stay until dealt with.
-	const noticeSticky = $derived(notice !== null && doc.diskNote === null);
 
 	// Focus mode means the writing owns the screen, and the browser's own chrome
 	// is half of what's in the way. requestFullscreen needs a user gesture —
@@ -594,16 +610,6 @@
 					Keep this one
 				</button>
 			{/if}
-			{#if noticeSticky}
-				<button
-					type="button"
-					class="notice-close"
-					aria-label="Dismiss notice"
-					onclick={() => (dismissedNotice = noticeText)}
-				>
-					×
-				</button>
-			{/if}
 		</div>
 	{/if}
 
@@ -958,14 +964,11 @@
 		font-size: 0.75rem;
 		line-height: 1.4;
 	}
-	.notice-action,
-	.notice-close {
+	.notice-action {
 		flex-shrink: 0;
 		border-radius: 0.3rem;
 		color: inherit;
 		cursor: pointer;
-	}
-	.notice-action {
 		border: 1px solid rgba(244, 241, 234, 0.5);
 		padding: 0.15rem 0.45rem;
 		font-weight: 500;
@@ -973,21 +976,12 @@
 	.notice-action:hover {
 		border-color: #f4f1ea;
 	}
-	.notice-close {
-		padding: 0 0.25rem;
-		font-size: 0.95rem;
-		line-height: 1;
-	}
-	.notice-action:focus-visible,
-	.notice-close:focus-visible {
+	.notice-action:focus-visible {
 		outline-color: #f4f1ea;
 	}
 	@media (pointer: coarse) {
 		.notice-action {
 			padding: 0.4rem 0.6rem;
-		}
-		.notice-close {
-			padding: 0.3rem 0.5rem;
 		}
 	}
 	/* Focus-mode exit affordance (touch has no Esc key) */
